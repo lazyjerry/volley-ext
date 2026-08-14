@@ -173,10 +173,15 @@ export interface ResponseRecord {
   error?: string;
 }
 
+/** collection 所屬資料根：shared = volley.dataFolder（共用）、private = volley.privateDataFolder（私人）。 */
+export type CollectionSource = 'shared' | 'private';
+
 export interface CollectionSummary {
   id: string;
   name: string;
   fileName: string;
+  /** 由雙 store 路由層補上；單一 CollectionStore 不自知來源 */
+  source?: CollectionSource;
 }
 
 export interface UiState {
@@ -197,6 +202,20 @@ export function isFolder(node: TreeNode): node is Folder {
 
 export function isRequest(node: TreeNode): node is RequestItem {
   return node.kind === 'request';
+}
+
+/**
+ * 依陣列實際順序把整棵樹的 sortKey 重編為 0..n-1。
+ * 匯入來源（Insomnia）的 sortKey 是負的時間戳且會重複，直接沿用的話存檔後
+ * 依 sortKey 重排會與匯入當下看到的順序不一致。
+ */
+export function normalizeSortKeys(nodes: TreeNode[]): void {
+  nodes.forEach((node, index) => {
+    node.sortKey = index;
+    if (isFolder(node)) {
+      normalizeSortKeys(node.children);
+    }
+  });
 }
 
 /** 走訪整棵樹，回傳每個 request 及其資料夾鏈（由外而內）。 */

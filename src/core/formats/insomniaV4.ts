@@ -12,7 +12,7 @@ import type {
   Scripts,
   TreeNode,
 } from '../model/types';
-import { defaultSettings, isFolder } from '../model/types';
+import { defaultSettings, isFolder, normalizeSortKeys } from '../model/types';
 import { genId } from '../model/ids';
 
 interface V4Resource {
@@ -148,6 +148,7 @@ export function importInsomniaV4(text: string): Collection {
     }
   };
   sortTree(root);
+  normalizeSortKeys(root);
 
   // environment：parentId = workspace → base；parentId = base env → sub
   const envResources = resources.filter((r) => r._type === 'environment');
