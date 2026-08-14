@@ -612,6 +612,9 @@ body.layout-narrow .pane.narrow-active {
   border-radius: 4px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
   padding: 4px 0;
+  /* 面板高度不足時改為內部捲動，避免項目被推出視窗外 */
+  max-height: calc(100vh - 8px);
+  overflow-y: auto;
 }
 
 #ctx-menu .item {
