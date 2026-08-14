@@ -43,6 +43,15 @@ export function resolveDataFolder(configValue: string, fallbackDir: string): Dat
   return { root, collectionsDir, stateDir, responsesDir, isFallback };
 }
 
+/** 資料夾內既有的 collection 檔數（<root>/collections/*.yaml|yml，與 loadAll 的過濾一致）。 */
+export function countCollectionFiles(root: string): number {
+  try {
+    return fs.readdirSync(path.join(root, 'collections')).filter((f) => /\.ya?ml$/i.test(f)).length;
+  } catch {
+    return 0;
+  }
+}
+
 /** Dropbox 衝突副本偵測（"xxx (使用者的 conflicted copy 2024-01-01).yaml" 等）。 */
 export function findConflictedCopies(collectionsDir: string): string[] {
   try {
