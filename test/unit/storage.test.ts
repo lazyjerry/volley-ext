@@ -6,7 +6,7 @@ import type { Collection } from '../../src/core/model/types';
 import { parseCollection, serializeCollection } from '../../src/core/formats/openapiStore';
 import { CollectionStore } from '../../src/storage/collectionStore';
 import { StateStore } from '../../src/storage/stateStore';
-import { collectionFileName, resolveDataFolder, slugify } from '../../src/storage/dataFolder';
+import { collectionFileName, countCollectionFiles, resolveDataFolder, slugify } from '../../src/storage/dataFolder';
 import { sampleCollection } from './helpers';
 
 function tmpDir(): string {
@@ -34,6 +34,19 @@ suite('storage/dataFolder', () => {
     const layout = resolveDataFolder('', path.join(dir, 'fb'));
     assert.strictEqual(layout.isFallback, true);
     assert.ok(layout.root.endsWith('fb'));
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  test('countCollectionFiles 只計 collections 下的 yaml/yml', () => {
+    const dir = tmpDir();
+    assert.strictEqual(countCollectionFiles(dir), 0); // 沒有 collections 子目錄
+    const collectionsDir = path.join(dir, 'collections');
+    fs.mkdirSync(collectionsDir);
+    assert.strictEqual(countCollectionFiles(dir), 0); // 空目錄
+    fs.writeFileSync(path.join(collectionsDir, 'a.openapi.yaml'), 'x');
+    fs.writeFileSync(path.join(collectionsDir, 'b.YML'), 'x');
+    fs.writeFileSync(path.join(collectionsDir, 'note.txt'), 'x');
+    assert.strictEqual(countCollectionFiles(dir), 2);
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
