@@ -1,0 +1,11 @@
+node_modules/
+out/
+media/main.js
+media/main.js.map
+.vscode-test/
+.vscode-test*/
+*.vsix
+*.log
+.DS_Store
+CLAUDE.md
+docs/*

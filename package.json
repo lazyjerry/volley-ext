@@ -1,0 +1,155 @@
+{
+  "name": "volley",
+  "displayName": "Volley",
+  "description": "VSCode 內的 REST client：資料以標準 OpenAPI 3.1 YAML 保存於可同步資料夾，支援 OpenAPI、curl 與 Insomnia v5/v4 格式匯入匯出",
+  "version": "0.1.0",
+  "publisher": "workjerry",
+  "license": "Apache-2.0",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "rest",
+    "http",
+    "api",
+    "openapi",
+    "curl",
+    "client"
+  ],
+  "extensionKind": [
+    "ui"
+  ],
+  "icon": "resources/icon.png",
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "panel": [
+        {
+          "id": "volley",
+          "title": "REST Client",
+          "icon": "resources/rest.svg"
+        }
+      ]
+    },
+    "views": {
+      "volley": [
+        {
+          "type": "webview",
+          "id": "volley.client",
+          "name": "Volley",
+          "icon": "resources/rest.svg",
+          "contextualTitle": "Volley"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "volley.open",
+        "title": "Volley: Open"
+      },
+      {
+        "command": "volley.newCollection",
+        "title": "Volley: New Collection"
+      },
+      {
+        "command": "volley.importInsomnia",
+        "title": "Volley: Import Insomnia (v5 YAML / v4 JSON)"
+      },
+      {
+        "command": "volley.importOpenApi",
+        "title": "Volley: Import OpenAPI 3.x"
+      },
+      {
+        "command": "volley.importCurl",
+        "title": "Volley: Import curl from Clipboard"
+      },
+      {
+        "command": "volley.exportInsomniaYaml",
+        "title": "Volley: Export Collection as Insomnia v5 YAML"
+      },
+      {
+        "command": "volley.exportOpenApi",
+        "title": "Volley: Export Clean OpenAPI (strip x-volley)"
+      },
+      {
+        "command": "volley.openDataFolder",
+        "title": "Volley: Reveal Data Folder"
+      },
+      {
+        "command": "volley.reload",
+        "title": "Volley: Reload from Disk"
+      }
+    ],
+    "configuration": {
+      "title": "Volley",
+      "properties": {
+        "volley.dataFolder": {
+          "type": "string",
+          "default": "",
+          "scope": "machine-overridable",
+          "description": "存放 collections 與狀態的資料夾（建議指向 Dropbox 等雲端同步資料夾以跨裝置共用）。空值時使用延伸模組專屬儲存空間。支援 ~/ 開頭。"
+        },
+        "volley.requestTimeoutMs": {
+          "type": "number",
+          "default": 30000,
+          "description": "請求逾時（毫秒）"
+        },
+        "volley.followRedirects": {
+          "type": "boolean",
+          "default": true,
+          "description": "request 設定為 global 時是否跟隨重新導向"
+        },
+        "volley.maxRedirects": {
+          "type": "number",
+          "default": 10,
+          "description": "重新導向次數上限"
+        },
+        "volley.responseHistoryLimit": {
+          "type": "number",
+          "default": 20,
+          "description": "每個 request 保留的回應歷史筆數"
+        },
+        "volley.maxStoredBodyBytes": {
+          "type": "number",
+          "default": 262144,
+          "description": "回應歷史中儲存的 body 大小上限（bytes，超過截斷）"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc -p . --noEmit",
+    "build:extension": "esbuild src/extension.ts --bundle --platform=node --format=cjs --external:vscode --outfile=out/extension.js --sourcemap",
+    "build:webview": "esbuild src/webview/main.ts --bundle --format=iife --platform=browser --target=es2022 --outfile=media/main.js --sourcemap",
+    "build:tests": "tsc -p .",
+    "build": "npm run typecheck && npm run build:extension && npm run build:webview",
+    "lint": "eslint .",
+    "test:unit": "npm run build:tests && mocha --ui tdd --timeout 10000 \"out/test/unit/**/*.test.js\"",
+    "test:integration": "node ./out/test/runTest.js",
+    "test": "npm run build && npm run test:unit && npm run test:integration",
+    "check": "npm run lint && npm run test",
+    "package:vsix": "npm run check && vsce package --no-dependencies --allow-missing-repository"
+  },
+  "dependencies": {
+    "yaml": "^2.5.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.0.0",
+    "@types/mocha": "^10.0.0",
+    "@types/node": "^24.0.0",
+    "@types/vscode": "^1.90.0",
+    "@vscode/test-electron": "^3.1.0",
+    "@vscode/vsce": "^3.6.0",
+    "ajv": "^8.17.0",
+    "ajv-formats": "^3.0.0",
+    "esbuild": "^0.25.0",
+    "eslint": "^9.0.0",
+    "glob": "^11.0.0",
+    "mocha": "^11.0.0",
+    "typescript": "^5.9.0",
+    "typescript-eslint": "^8.0.0"
+  }
+}
