@@ -75,6 +75,7 @@ export type ClientMessage =
         | 'importInsomnia'
         | 'importOpenApi'
         | 'importCurl'
+        | 'importFromUrl'
         | 'exportInsomniaYaml'
         | 'exportOpenApi'
         | 'newCollection'

@@ -21,6 +21,7 @@ suite('extension activation', () => {
       'volley.importInsomnia',
       'volley.importOpenApi',
       'volley.importCurl',
+      'volley.importFromUrl',
       'volley.exportInsomniaYaml',
       'volley.exportOpenApi',
       'volley.chooseDataFolder',
