@@ -2,7 +2,7 @@
   "name": "volley",
   "displayName": "Volley",
   "description": "VSCode 內的 REST client：資料以標準 OpenAPI 3.1 YAML 保存於可同步資料夾，支援 OpenAPI、curl 與 Insomnia v5/v4 格式匯入匯出",
-  "version": "0.1.0",
+  "version": "0.4.0",
   "publisher": "workjerry",
   "license": "Apache-2.0",
   "engines": {
@@ -29,7 +29,7 @@
       "panel": [
         {
           "id": "volley",
-          "title": "REST Client",
+          "title": "Volleeeey",
           "icon": "resources/rest.svg"
         }
       ]
@@ -75,6 +75,10 @@
         "title": "Volley: Export Clean OpenAPI (strip x-volley)"
       },
       {
+        "command": "volley.chooseDataFolder",
+        "title": "Volley: Choose Data Folder"
+      },
+      {
         "command": "volley.openDataFolder",
         "title": "Volley: Reveal Data Folder"
       },
@@ -90,7 +94,13 @@
           "type": "string",
           "default": "",
           "scope": "machine-overridable",
-          "description": "存放 collections 與狀態的資料夾（建議指向 Dropbox 等雲端同步資料夾以跨裝置共用）。空值時使用延伸模組專屬儲存空間。支援 ~/ 開頭。"
+          "description": "共用資料夾：存放 collections 與狀態（建議指向 Dropbox 等雲端同步資料夾以跨裝置共用）。空值時使用延伸模組專屬儲存空間。支援 ~/ 開頭。"
+        },
+        "volley.privateDataFolder": {
+          "type": "string",
+          "default": "",
+          "scope": "machine-overridable",
+          "description": "私人資料夾：與共用資料夾完全隔離的第二個 collections 存放位置（適合放不同步的個人 collection）。空值時使用延伸模組專屬儲存空間的 private 子資料夾。支援 ~/ 開頭，不可與共用資料夾相同路徑。"
         },
         "volley.requestTimeoutMs": {
           "type": "number",
@@ -124,8 +134,9 @@
     "typecheck": "tsc -p . --noEmit",
     "build:extension": "esbuild src/extension.ts --bundle --platform=node --format=cjs --external:vscode --outfile=out/extension.js --sourcemap",
     "build:webview": "esbuild src/webview/main.ts --bundle --format=iife --platform=browser --target=es2022 --outfile=media/main.js --sourcemap",
+    "build:codicons": "mkdir -p media/codicon && cp node_modules/@vscode/codicons/dist/codicon.css node_modules/@vscode/codicons/dist/codicon.ttf media/codicon/",
     "build:tests": "tsc -p .",
-    "build": "npm run typecheck && npm run build:extension && npm run build:webview",
+    "build": "npm run typecheck && npm run build:extension && npm run build:webview && npm run build:codicons",
     "lint": "eslint .",
     "test:unit": "npm run build:tests && mocha --ui tdd --timeout 10000 \"out/test/unit/**/*.test.js\"",
     "test:integration": "node ./out/test/runTest.js",
@@ -141,6 +152,7 @@
     "@types/mocha": "^10.0.0",
     "@types/node": "^24.0.0",
     "@types/vscode": "^1.90.0",
+    "@vscode/codicons": "^0.0.46-24",
     "@vscode/test-electron": "^3.1.0",
     "@vscode/vsce": "^3.6.0",
     "ajv": "^8.17.0",

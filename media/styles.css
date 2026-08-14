@@ -4,13 +4,13 @@
   --acc: #8abc39;          /* 亮綠：暗色主題 accent */
   --acc-secondary: #8fa366;/* 橄欖綠：hover / 次要 */
   --acc-deep: #313d24;
-  --method-get: #8abc39;
-  --method-post: #7ecf2b;
-  --method-put: #ff9a1f;
-  --method-patch: #f0e137;
-  --method-delete: #ff5631;
-  --method-options: #46c1e6;
-  --method-head: #46c1e6;
+  --method-get: #49cc90;
+  --method-post: #f5c451;
+  --method-put: #61affe;
+  --method-patch: #c77dff;
+  --method-delete: #f26d6d;
+  --method-options: #a78bfa;
+  --method-head: #4dd0e1;
   --danger: #ff5631;
   --warn: #ff9a1f;
 }
@@ -18,11 +18,13 @@
 body.vscode-light {
   --acc: #597a33;          /* 深綠：亮色主題 accent */
   --acc-secondary: #8fa366;
-  --method-get: #597a33;
-  --method-post: #4f8a1c;
-  --method-patch: #a08f10;
-  --method-options: #20aed9;
-  --method-head: #20aed9;
+  --method-get: #168a5b;
+  --method-post: #9a6700;
+  --method-put: #0969da;
+  --method-patch: #8250df;
+  --method-delete: #cf222e;
+  --method-options: #6f42c1;
+  --method-head: #087e8b;
 }
 
 * {
@@ -71,11 +73,19 @@ button.secondary {
 button.icon {
   background: transparent;
   color: var(--vscode-icon-foreground, var(--vscode-foreground));
-  padding: 2px 6px;
+  padding: 3px 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 button.icon:hover {
   background: var(--vscode-toolbar-hoverBackground, rgba(128, 128, 128, 0.2));
+}
+
+button.icon:disabled {
+  opacity: 0.45;
+  pointer-events: none;
 }
 
 input[type='text'],
@@ -102,13 +112,116 @@ textarea {
   resize: none;
 }
 
-input.has-var {
+.template-field.has-var {
   border-bottom: 1px solid var(--acc);
 }
 
-input.has-missing-var {
+.template-field.has-missing-var {
   border-bottom: 1px solid var(--warn);
 }
+
+.template-field {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  background: var(--vscode-input-background);
+  border-radius: 2px;
+}
+
+.template-field > input,
+.template-field > textarea,
+.template-overlay {
+  grid-area: 1 / 1;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  font: inherit;
+  letter-spacing: inherit;
+  padding: 3px 6px;
+  white-space: pre;
+}
+
+.template-field.multiline > textarea,
+.template-field.multiline > .template-overlay {
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+
+.template-field > input,
+.template-field > textarea {
+  position: relative;
+  z-index: 1;
+  background: transparent;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  caret-color: var(--vscode-input-foreground);
+}
+
+.template-field > input::placeholder,
+.template-field > textarea::placeholder {
+  color: transparent;
+}
+
+.template-overlay {
+  z-index: 0;
+  pointer-events: none;
+  color: var(--vscode-input-foreground);
+  overflow: hidden;
+  border: 1px solid transparent;
+}
+
+.template-placeholder {
+  color: var(--vscode-input-placeholderForeground);
+}
+
+.template-token {
+  color: var(--vscode-badge-foreground);
+  background: var(--vscode-badge-background);
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 1px var(--acc);
+}
+
+.template-token.missing {
+  box-shadow: inset 0 0 0 1px var(--warn);
+  text-decoration: underline wavy var(--warn);
+}
+
+.var-suggestions {
+  display: none;
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 2px);
+  left: 0;
+  right: 0;
+  max-height: 220px;
+  overflow: auto;
+  padding: 3px;
+  background: var(--vscode-editorSuggestWidget-background, var(--vscode-menu-background));
+  border: 1px solid var(--vscode-editorSuggestWidget-border, var(--vscode-widget-border));
+  box-shadow: 0 2px 8px var(--vscode-widget-shadow);
+}
+
+.var-suggestions.open { display: block; }
+
+.var-suggestion {
+  display: flex;
+  width: 100%;
+  gap: 10px;
+  justify-content: space-between;
+  padding: 4px 6px;
+  text-align: left;
+  background: transparent;
+  color: var(--vscode-editorSuggestWidget-foreground, var(--vscode-foreground));
+}
+
+.var-suggestion.selected,
+.var-suggestion:hover {
+  background: var(--vscode-editorSuggestWidget-selectedBackground, var(--vscode-list-activeSelectionBackground));
+  color: var(--vscode-editorSuggestWidget-selectedForeground, inherit);
+}
+
+.var-suggestion .path { font-family: var(--vscode-editor-font-family, monospace); }
+.var-suggestion .value { opacity: 0.7; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ===== 版面：寬 = 三欄 grid，窄 = tab 單欄 ===== */
 
@@ -125,6 +238,28 @@ input.has-missing-var {
 .notice.info { color: var(--vscode-foreground); }
 .notice.warn { color: var(--warn); }
 .notice.error { color: var(--danger); }
+
+#autosave-toast {
+  position: fixed;
+  left: 12px;
+  bottom: 12px;
+  z-index: 1000;
+  padding: 7px 12px;
+  color: var(--vscode-notifications-foreground, var(--vscode-foreground));
+  background: var(--vscode-notifications-background, var(--vscode-editorWidget-background));
+  border: 1px solid var(--vscode-notifications-border, var(--vscode-widget-border, transparent));
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(6px);
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+#autosave-toast.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
 
 #tabbar {
   display: none;
@@ -230,6 +365,130 @@ body.layout-narrow .pane.narrow-active {
   min-width: 0;
 }
 
+.sidebar-header button.more-button {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px 6px 3px 8px;
+  white-space: nowrap;
+}
+
+/* 無 collection 時第二行只剩「更多…」，撐滿整行 */
+.sidebar-header .row > button.more-button:only-child {
+  flex: 1 1 auto;
+  justify-content: center;
+}
+
+/* select2 式下拉（collection / 環境選擇器） */
+.combo {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.combo-button {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 6px;
+  cursor: pointer;
+  color: var(--vscode-input-foreground);
+  background: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border, transparent);
+  border-radius: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.combo-button:focus {
+  outline: none;
+  border-color: var(--vscode-focusBorder);
+}
+
+.combo-button .codicon-chevron-down {
+  margin-left: auto;
+  flex: 0 0 auto;
+  opacity: 0.8;
+}
+
+.combo .combo-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.combo-panel {
+  position: absolute;
+  z-index: 90;
+  top: calc(100% + 2px);
+  left: 0;
+  min-width: 100%;
+  max-width: 320px;
+  display: flex;
+  flex-direction: column;
+  background: var(--vscode-editorSuggestWidget-background, var(--vscode-menu-background));
+  border: 1px solid var(--vscode-editorSuggestWidget-border, var(--vscode-widget-border));
+  border-radius: 4px;
+  box-shadow: 0 2px 8px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.35));
+  padding: 4px;
+  gap: 4px;
+}
+
+.combo-search {
+  width: 100%;
+}
+
+.combo-list {
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.combo-group-label {
+  padding: 4px 6px 2px;
+  font-size: 0.8em;
+  font-weight: 700;
+  opacity: 0.65;
+  text-transform: none;
+}
+
+.combo-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  cursor: pointer;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
+.combo-option.active {
+  background: var(--vscode-editorSuggestWidget-selectedBackground, var(--vscode-list-activeSelectionBackground));
+  color: var(--vscode-editorSuggestWidget-selectedForeground, var(--vscode-list-activeSelectionForeground));
+}
+
+.combo-option.selected .combo-label {
+  color: var(--acc);
+  font-weight: 600;
+}
+
+.combo-option.active.selected .combo-label {
+  color: inherit;
+}
+
+.combo-option.combo-create {
+  border-top: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.25));
+  border-radius: 0 0 3px 3px;
+  margin-top: 2px;
+  padding-top: 6px;
+}
+
+.combo-empty {
+  padding: 6px;
+  opacity: 0.65;
+}
+
 .tree {
   flex: 1 1 auto;
   overflow-y: auto;
@@ -259,9 +518,38 @@ body.layout-narrow .pane.narrow-active {
   color: var(--vscode-list-activeSelectionForeground);
 }
 
-.tree-row.drop-target {
+/* 拖放指示：into = 放進資料夾（虛線框）；before / after = 插在該列前後（指示線） */
+.tree-row.drop-into {
   outline: 1px dashed var(--acc);
   outline-offset: -1px;
+}
+
+.tree-row.drop-before,
+.tree-row.drop-after {
+  position: relative;
+}
+
+.tree-row.drop-before::before,
+.tree-row.drop-after::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--acc);
+  pointer-events: none;
+}
+
+.tree-row.drop-before::before {
+  top: -1px;
+}
+
+.tree-row.drop-after::after {
+  bottom: -1px;
+}
+
+.tree-row.dragging {
+  opacity: 0.45;
 }
 
 .tree-children {
@@ -269,11 +557,19 @@ body.layout-narrow .pane.narrow-active {
 }
 
 .twisty {
-  width: 12px;
+  width: 16px;
   flex: 0 0 auto;
-  text-align: center;
-  font-size: 0.8em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   opacity: 0.8;
+}
+
+.tree-icon {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  opacity: 0.9;
 }
 
 .method-tag {
@@ -355,7 +651,7 @@ body.layout-narrow .pane.narrow-active {
   flex: 0 0 auto;
 }
 
-.pane-toolbar input.url {
+.pane-toolbar .template-field.url {
   flex: 1 1 auto;
   min-width: 0;
   font-family: var(--vscode-editor-font-family, monospace);
@@ -401,6 +697,13 @@ body.vscode-light .subtab-badge {
   padding: 8px;
 }
 
+.docs-editor {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 180px;
+}
+
 .kv-table {
   display: flex;
   flex-direction: column;
@@ -413,17 +716,17 @@ body.vscode-light .subtab-badge {
   align-items: center;
 }
 
-.kv-row input.k {
+.kv-row .template-field.k {
   flex: 0 0 32%;
   min-width: 60px;
 }
 
-.kv-row input.v {
+.kv-row .template-field.v {
   flex: 1 1 auto;
   min-width: 60px;
 }
 
-.kv-row.disabled input {
+.kv-row.disabled .template-field {
   opacity: 0.5;
 }
 
@@ -434,10 +737,27 @@ body.vscode-light .subtab-badge {
   height: 100%;
 }
 
-.body-editor textarea {
+.body-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* 美化按鈕靠右，與格式選單同一行 */
+.body-toolbar > button {
+  margin-left: auto;
+}
+
+.body-editor > .template-field.multiline {
   flex: 1 1 auto;
   min-height: 120px;
   width: 100%;
+}
+
+.body-editor > .template-field.multiline textarea,
+.body-editor > .template-field.multiline .template-overlay {
+  min-height: 120px;
+  height: 100%;
 }
 
 .form-grid {
@@ -460,6 +780,11 @@ body.vscode-light .subtab-badge {
 
 .var-preview .missing {
   color: var(--warn);
+}
+
+.response-var-preview {
+  flex: 0 0 auto;
+  border-bottom: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.2));
 }
 
 .hint {
@@ -585,6 +910,10 @@ table.plain th {
 .env-list .items {
   flex: 1 1 auto;
   overflow-y: auto;
+}
+
+.env-close {
+  margin-left: auto;
 }
 
 .env-item {

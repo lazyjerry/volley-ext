@@ -9,14 +9,18 @@ import { exportInsomniaV5, importInsomniaV5, isInsomniaV5 } from './core/formats
 import { importInsomniaV4, isInsomniaV4 } from './core/formats/insomniaV4';
 import { importOpenApi } from './core/formats/openapiImport';
 import * as YAML from 'yaml';
+import type { CollectionSource } from './core/model/types';
 import { CollectionStore } from './storage/collectionStore';
 import { StateStore } from './storage/stateStore';
-import { findConflictedCopies, resolveDataFolder } from './storage/dataFolder';
+import { DualCollectionStore, DualStateStore } from './storage/dualStore';
+import { expandHome, findConflictedCopies, resolveDataFolder } from './storage/dataFolder';
 import type { DataFolderLayout } from './storage/dataFolder';
 import { ClientViewProvider } from './views/clientViewProvider';
 
-let collectionStore: CollectionStore | undefined;
-let stateStore: StateStore | undefined;
+let collectionStore: DualCollectionStore | undefined;
+let stateStore: DualStateStore | undefined;
+
+const SOURCE_LABELS: Record<CollectionSource, string> = { shared: '共用', private: '私人' };
 
 function emptyCollection(name: string): Collection {
   const now = Date.now();
@@ -36,24 +40,49 @@ function emptyCollection(name: string): Collection {
 }
 
 export function activate(context: vscode.ExtensionContext): void {
-  let layout: DataFolderLayout;
+  // 共用（volley.dataFolder）與私人（volley.privateDataFolder）雙資料根目錄，嚴格隔離不混用
+  const layouts = {} as Record<CollectionSource, DataFolderLayout>;
 
-  const initStores = (): void => {
-    const configured = vscode.workspace
-      .getConfiguration('volley')
-      .get<string>('dataFolder', '');
+  const resolveWithFallback = (configured: string, fallbackDir: string): DataFolderLayout => {
     try {
-      layout = resolveDataFolder(configured, context.globalStorageUri.fsPath);
+      return resolveDataFolder(configured, fallbackDir);
     } catch (err) {
       void vscode.window.showErrorMessage(
         `Volley：資料夾初始化失敗（${err instanceof Error ? err.message : String(err)}），改用預設儲存空間`,
       );
-      layout = resolveDataFolder('', context.globalStorageUri.fsPath);
+      return resolveDataFolder('', fallbackDir);
     }
+  };
+
+  const initStores = (): void => {
+    const config = vscode.workspace.getConfiguration('volley');
+    const sharedConfigured = config.get<string>('dataFolder', '');
+    let privateConfigured = config.get<string>('privateDataFolder', '');
+    layouts.shared = resolveWithFallback(sharedConfigured, context.globalStorageUri.fsPath);
+    // 兩個根目錄不可指向同一路徑，否則同一批檔案會被兩個 store 重複載入
+    const privateTrimmed = privateConfigured.trim();
+    if (privateTrimmed !== '' && path.resolve(expandHome(privateTrimmed)) === layouts.shared.root) {
+      void vscode.window.showErrorMessage(
+        'Volley：私人資料夾（volley.privateDataFolder）與共用資料夾為同一路徑，私人資料夾改用預設儲存空間。',
+      );
+      privateConfigured = '';
+    }
+    layouts.private = resolveWithFallback(
+      privateConfigured,
+      path.join(context.globalStorageUri.fsPath, 'private'),
+    );
     collectionStore?.dispose();
-    collectionStore = new CollectionStore(layout.collectionsDir);
-    collectionStore.loadAll();
-    stateStore = new StateStore(layout.stateDir, layout.responsesDir);
+    const dual = new DualCollectionStore(
+      new CollectionStore(layouts.shared.collectionsDir),
+      new CollectionStore(layouts.private.collectionsDir),
+    );
+    dual.loadAll();
+    collectionStore = dual;
+    stateStore = new DualStateStore(
+      new StateStore(layouts.shared.stateDir, layouts.shared.responsesDir),
+      new StateStore(layouts.private.stateDir, layouts.private.responsesDir),
+      (id) => dual.sourceOf(id),
+    );
   };
   initStores();
 
@@ -65,9 +94,12 @@ export function activate(context: vscode.ExtensionContext): void {
       return stateStore!;
     },
     getDataFolderInfo: () => ({
-      path: layout.root,
-      isFallback: layout.isFallback,
-      conflictedCopies: findConflictedCopies(layout.collectionsDir),
+      shared: { path: layouts.shared.root, isFallback: layouts.shared.isFallback },
+      private: { path: layouts.private.root, isFallback: layouts.private.isFallback },
+      conflictedCopies: [
+        ...findConflictedCopies(layouts.shared.collectionsDir).map((f) => `共用/${f}`),
+        ...findConflictedCopies(layouts.private.collectionsDir).map((f) => `私人/${f}`),
+      ],
     }),
   });
   provider.attachStoreEvents();
@@ -76,7 +108,7 @@ export function activate(context: vscode.ExtensionContext): void {
     provider,
     vscode.window.registerWebviewViewProvider(ClientViewProvider.viewType, provider),
     vscode.workspace.onDidChangeConfiguration((e) => {
-      if (e.affectsConfiguration('volley.dataFolder')) {
+      if (e.affectsConfiguration('volley.dataFolder') || e.affectsConfiguration('volley.privateDataFolder')) {
         initStores();
         provider.attachStoreEvents();
         provider.sendInit();
@@ -92,16 +124,33 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.executeCommand('volley.client.focus'),
   );
 
-  register('volley.newCollection', async (presetName) => {
+  const pickSource = async (): Promise<CollectionSource | undefined> => {
+    const picked = await vscode.window.showQuickPick(
+      (['shared', 'private'] as const).map((source) => ({
+        label: `${SOURCE_LABELS[source]}資料夾`,
+        description: layouts[source].root,
+        source,
+      })),
+      { title: '選擇存放位置' },
+    );
+    return picked?.source;
+  };
+
+  register('volley.newCollection', async (presetName, presetSource) => {
+    const source =
+      presetSource === 'shared' || presetSource === 'private' ? presetSource : await pickSource();
+    if (!source) {
+      return;
+    }
     const name =
       typeof presetName === 'string' && presetName.trim() !== ''
         ? presetName.trim()
-        : await vscode.window.showInputBox({ prompt: '新 collection 名稱', value: 'New Collection' });
+        : await vscode.window.showInputBox({ prompt: `新 collection 名稱（${SOURCE_LABELS[source]}）`, value: 'New Collection' });
     if (!name) {
       return;
     }
     const collection = emptyCollection(name);
-    collectionStore!.create(collection);
+    collectionStore!.create(collection, source);
     provider.openCollection(collection.id);
   });
 
@@ -111,8 +160,46 @@ export function activate(context: vscode.ExtensionContext): void {
     void vscode.window.setStatusBarMessage('Volley：已從磁碟重新載入', 3000);
   });
 
-  register('volley.openDataFolder', () => {
-    void vscode.env.openExternal(vscode.Uri.file(layout.root));
+  register('volley.chooseDataFolder', async (presetSource) => {
+    const source =
+      presetSource === 'shared' || presetSource === 'private' ? presetSource : await pickSource();
+    if (!source) {
+      return;
+    }
+    const uris = await vscode.window.showOpenDialog({
+      canSelectFiles: false,
+      canSelectFolders: true,
+      canSelectMany: false,
+      openLabel: `設為${SOURCE_LABELS[source]}資料夾`,
+      title: `選擇 Volley ${SOURCE_LABELS[source]}資料夾`,
+      defaultUri: layouts[source].isFallback ? undefined : vscode.Uri.file(layouts[source].root),
+    });
+    if (!uris?.[0]) {
+      return;
+    }
+    const picked = path.resolve(uris[0].fsPath);
+    const other = source === 'shared' ? 'private' : 'shared';
+    if (picked === layouts[other].root) {
+      void vscode.window.showErrorMessage(
+        `Volley：該路徑已是${SOURCE_LABELS[other]}資料夾，兩個資料夾不可相同。`,
+      );
+      return;
+    }
+    const key = source === 'shared' ? 'dataFolder' : 'privateDataFolder';
+    // 寫入設定後由 onDidChangeConfiguration 重建 stores 並刷新畫面
+    await vscode.workspace
+      .getConfiguration('volley')
+      .update(key, picked, vscode.ConfigurationTarget.Global);
+    void vscode.window.showInformationMessage(`Volley：${SOURCE_LABELS[source]}資料夾已設為 ${picked}`);
+  });
+
+  register('volley.openDataFolder', async (presetSource) => {
+    const source =
+      presetSource === 'shared' || presetSource === 'private' ? presetSource : await pickSource();
+    if (!source) {
+      return;
+    }
+    void vscode.env.openExternal(vscode.Uri.file(layouts[source].root));
   });
 
   const importCollection = (collection: Collection): void => {
@@ -120,9 +207,14 @@ export function activate(context: vscode.ExtensionContext): void {
     if (collectionStore!.get(collection.id)) {
       collection.id = genId('wrk');
     }
-    collectionStore!.create(collection);
+    // 匯入落在目前作用中 collection 的同一個資料夾；沒有作用中時進共用
+    const active = provider.activeCollection;
+    const source = (active && collectionStore!.sourceOf(active.id)) || 'shared';
+    collectionStore!.create(collection, source);
     provider.openCollection(collection.id);
-    void vscode.window.showInformationMessage(`已匯入 collection「${collection.name}」`);
+    void vscode.window.showInformationMessage(
+      `已匯入 collection「${collection.name}」（${SOURCE_LABELS[source]}資料夾）`,
+    );
   };
 
   register('volley.importInsomnia', async () => {

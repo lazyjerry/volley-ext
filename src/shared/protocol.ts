@@ -3,15 +3,21 @@
 
 import type {
   Collection,
+  CollectionSource,
   CollectionSummary,
   RequestItem,
   ResponseRecord,
   UiState,
 } from '../core/model/types';
 
+export interface DataFolderInfo {
+  path: string;
+  /** true = 未設定，落在延伸模組專屬儲存空間 */
+  isFallback: boolean;
+}
+
 export interface ClientConfig {
-  dataFolderPath: string;
-  isFallbackDataFolder: boolean;
+  dataFolders: Record<CollectionSource, DataFolderInfo>;
   requestTimeoutMs: number;
   responseHistoryLimit: number;
 }
@@ -41,14 +47,20 @@ export type HostMessage =
   | { type: 'historyLoaded'; requestId: string; records: ResponseRecord[] }
   | { type: 'requestInserted'; request: RequestItem; folderId: string | null }
   | { type: 'curlExported'; requestId: string; text: string }
+  | { type: 'folderDeleteConfirmed'; folderId: string; mode: 'all' | 'folderOnly' }
   | { type: 'notice'; level: 'info' | 'warn' | 'error'; message: string };
 
 // Webview → Extension
 export type ClientMessage =
   | { type: 'ready' }
   | { type: 'selectCollection'; collectionId: string }
-  | { type: 'createCollection'; name: string }
+  | { type: 'createCollection'; name: string; source: CollectionSource }
+  | { type: 'openDataFolder'; source: CollectionSource }
+  | { type: 'chooseDataFolder'; source: CollectionSource }
+  | { type: 'renameCollection'; collectionId: string }
   | { type: 'deleteCollection'; collectionId: string }
+  | { type: 'confirmDeleteFolder'; folderId: string; name: string; requestCount: number; folderCount: number }
+  | { type: 'showNotice'; level: 'info' | 'warn' | 'error'; message: string }
   | { type: 'updateCollection'; collection: Collection }
   | { type: 'sendRequest'; collectionId: string; requestId: string }
   | { type: 'cancelRequest'; requestId: string }
@@ -65,7 +77,6 @@ export type ClientMessage =
         | 'importCurl'
         | 'exportInsomniaYaml'
         | 'exportOpenApi'
-        | 'openDataFolder'
         | 'newCollection'
         | 'reload';
     };
