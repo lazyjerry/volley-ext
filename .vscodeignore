@@ -7,11 +7,12 @@ AGENTS.md
 .vscode-test*/**
 .gitignore
 .DS_Store
-package-lock.json
+package-lock*.json
 READEME.md
 src/**
 test/**
 scripts/**
+samples/**
 docs/**
 node_modules/**
 eslint.config.mjs
@@ -22,4 +23,5 @@ resources/rest-src.svg
 out/src/**
 out/test/**
 out/**/*.map
+out 2/**
 media/**/*.map
