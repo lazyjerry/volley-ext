@@ -236,8 +236,8 @@ function showCtxMenu(x: number, y: number, items: MenuItem[]): void {
   }
   document.body.append(menu);
   const rect = menu.getBoundingClientRect();
-  menu.style.left = `${Math.min(x, window.innerWidth - rect.width - 4)}px`;
-  menu.style.top = `${Math.min(y, window.innerHeight - rect.height - 4)}px`;
+  menu.style.left = `${Math.max(4, Math.min(x, window.innerWidth - rect.width - 4))}px`;
+  menu.style.top = `${Math.max(4, Math.min(y, window.innerHeight - rect.height - 4))}px`;
   setTimeout(() => {
     window.addEventListener('click', closeCtxMenu, { once: true });
     window.addEventListener('contextmenu', closeCtxMenu, { once: true });
