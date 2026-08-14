@@ -80,6 +80,48 @@ suite('storage/collectionStore', () => {
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
+  test('更新 collection 名稱會同步 list 並持久化', async () => {
+    const dir = tmpDir();
+    const store = new CollectionStore(dir);
+    const original = sampleCollection();
+    store.create(original);
+    await store.flush();
+
+    const renamed = JSON.parse(JSON.stringify(original)) as Collection;
+    renamed.name = 'Renamed Collection';
+    store.update(renamed);
+
+    assert.strictEqual(store.list()[0].name, 'Renamed Collection');
+    await store.flush();
+    const reloadedStore = new CollectionStore(dir);
+    assert.strictEqual(reloadedStore.loadAll()[0].name, 'Renamed Collection');
+
+    store.dispose();
+    reloadedStore.dispose();
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  test('環境變數 update + flush 後可由新 store 讀回', async () => {
+    const dir = tmpDir();
+    const store = new CollectionStore(dir);
+    const c = sampleCollection();
+    store.create(c);
+    await store.flush();
+
+    const updated = JSON.parse(JSON.stringify(c)) as Collection;
+    updated.environments.base.data = { base_url: 'https://reload.example.com', token: 'saved' };
+    updated.environments.subEnvironments[0].data = { token: 'production-saved' };
+    store.update(updated);
+    await store.flush();
+
+    const reloadedStore = new CollectionStore(dir);
+    const [reloaded] = reloadedStore.loadAll();
+    assert.deepStrictEqual(reloaded.environments, updated.environments);
+    store.dispose();
+    reloadedStore.dispose();
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
   test('外部變更觸發 onExternalChange；自寫不觸發', async () => {
     const dir = tmpDir();
     const store = new CollectionStore(dir);
