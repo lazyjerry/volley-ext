@@ -5,7 +5,9 @@ import type { BodyParam, Header, QueryParam, RequestItem } from '../../core/mode
 import { walkRequests } from '../../core/model/types';
 import { containsTemplate, interpolate } from '../../core/vars/template';
 import { resolveEnvironment } from '../../core/vars/environment';
-import { el, post, render, selectedRequest, state, touch } from '../store';
+import { prettyJson, prettyXml, prettyYaml } from '../../core/formats/prettyPrint';
+import { el, notice, post, render, selectedRequest, state, touch } from '../store';
+import { renderResponsePane } from './responsePane';
 
 const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'];
 
@@ -38,46 +40,211 @@ function varInput(
   value: string,
   onInput: (value: string) => void,
   props: Record<string, unknown> = {},
-): HTMLInputElement {
-  const input = el('input', { type: 'text', value, spellcheck: false, ...props });
-  const applyClass = (): void => {
-    const has = containsTemplate(input.value);
-    input.classList.toggle('has-var', has);
-    if (has) {
-      const { missing } = interpolate(input.value, currentEnv());
-      input.classList.toggle('has-missing-var', missing.length > 0);
-    } else {
-      input.classList.remove('has-missing-var');
+): HTMLElement {
+  return varField('input', value, onInput, props);
+}
+
+function varTextarea(
+  value: string,
+  onInput: (value: string) => void,
+  props: Record<string, unknown> = {},
+): HTMLElement {
+  return varField('textarea', value, onInput, props);
+}
+
+const VAR_TOKEN_RE = /\{\{\s*[^{}]+?\s*\}\}/g;
+
+function environmentPaths(data: Record<string, unknown>): Array<{ path: string; value: string }> {
+  const result: Array<{ path: string; value: string }> = [];
+  const visit = (value: unknown, parts: string[]): void => {
+    if (parts.length > 0) {
+      result.push({
+        path: parts.join('.'),
+        value: value !== null && typeof value === 'object' ? JSON.stringify(value) : String(value ?? ''),
+      });
+    }
+    if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+      for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+        visit(child, [...parts, key]);
+      }
     }
   };
+  visit(data, []);
+  return result;
+}
+
+function varField(
+  kind: 'input' | 'textarea',
+  value: string,
+  onInput: (value: string) => void,
+  props: Record<string, unknown>,
+): HTMLElement {
+  const fieldClass = String(props.class ?? '');
+  const fieldProps = { ...props };
+  delete fieldProps.class;
+  const input = kind === 'input'
+    ? el('input', { type: 'text', value, spellcheck: false, ...fieldProps }) as HTMLInputElement
+    : el('textarea', { spellcheck: false, ...fieldProps }) as HTMLTextAreaElement;
+  input.value = value;
+  const overlay = el('div', { class: 'template-overlay', 'aria-hidden': 'true' });
+  const suggestions = el('div', { class: 'var-suggestions', role: 'listbox' });
+  const wrapper = el('div', { class: `template-field ${kind === 'textarea' ? 'multiline' : ''} ${fieldClass}` }, overlay, input, suggestions);
+  let suggestionIndex = 0;
+  let triggerStart = -1;
+
+  const syncScroll = (): void => {
+    overlay.scrollLeft = input.scrollLeft;
+    overlay.scrollTop = input.scrollTop;
+  };
+  const paint = (): void => {
+    overlay.replaceChildren();
+    if (input.value === '') {
+      overlay.append(el('span', { class: 'template-placeholder' }, String(fieldProps.placeholder ?? '')));
+      return;
+    }
+    let offset = 0;
+    for (const match of input.value.matchAll(VAR_TOKEN_RE)) {
+      const start = match.index ?? 0;
+      if (start > offset) {
+        overlay.append(document.createTextNode(input.value.slice(offset, start)));
+      }
+      const missing = interpolate(match[0], currentEnv()).missing.length > 0;
+      overlay.append(el('span', { class: `template-token${missing ? ' missing' : ''}` }, match[0]));
+      offset = start + match[0].length;
+    }
+    overlay.append(document.createTextNode(input.value.slice(offset)));
+    syncScroll();
+  };
+  const closeSuggestions = (): void => {
+    suggestions.classList.remove('open');
+    suggestions.replaceChildren();
+    triggerStart = -1;
+  };
+  const chooseSuggestion = (path: string): void => {
+    const end = input.selectionStart ?? input.value.length;
+    input.setRangeText(`{{ _.${path} }}`, triggerStart, end, 'end');
+    closeSuggestions();
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.focus();
+  };
+  const updateSuggestions = (): void => {
+    const caret = input.selectionStart;
+    if (caret === null || input.selectionEnd !== caret) {
+      closeSuggestions();
+      return;
+    }
+    const before = input.value.slice(0, caret);
+    const match = /(?:^|[\s=:/;,(])\._([\w$.-]*)$/.exec(before);
+    if (!match) {
+      closeSuggestions();
+      return;
+    }
+    triggerStart = caret - match[1].length - 2;
+    const query = match[1].toLowerCase();
+    const matches = environmentPaths(currentEnv())
+      .filter((item) => item.path.toLowerCase().includes(query))
+      .slice(0, 12);
+    suggestions.replaceChildren();
+    suggestionIndex = Math.min(suggestionIndex, Math.max(0, matches.length - 1));
+    matches.forEach((item, index) => {
+      suggestions.append(el('button', {
+        type: 'button',
+        class: `var-suggestion${index === suggestionIndex ? ' selected' : ''}`,
+        role: 'option',
+        onmousedown: (ev: MouseEvent) => ev.preventDefault(),
+        onclick: () => chooseSuggestion(item.path),
+      }, el('span', { class: 'path' }, `_.${item.path}`), el('span', { class: 'value' }, item.value)));
+    });
+    suggestions.classList.toggle('open', matches.length > 0);
+  };
+  const applyClass = (): void => {
+    const has = containsTemplate(input.value);
+    wrapper.classList.toggle('has-var', has);
+    if (has) {
+      const { missing } = interpolate(input.value, currentEnv());
+      wrapper.classList.toggle('has-missing-var', missing.length > 0);
+    } else {
+      wrapper.classList.remove('has-missing-var');
+    }
+    paint();
+  };
   applyClass();
-  let preview: HTMLElement | null = null;
+  let showingPreview = false;
+  const refreshResponsePane = (): void => {
+    const responsePane = document.getElementById('pane-response');
+    if (responsePane) {
+      renderResponsePane(responsePane);
+    }
+  };
   const showPreview = (): void => {
     hidePreview();
     if (!containsTemplate(input.value)) {
       return;
     }
     const { result, missing } = interpolate(input.value, currentEnv());
-    preview = el('div', { class: 'var-preview' }, '→ ', result);
-    if (missing.length > 0) {
-      preview.append(el('span', { class: 'missing' }, ` （未定義：${missing.join(', ')}）`));
-    }
-    input.insertAdjacentElement('afterend', preview);
+    state.variablePreview = { result, missing };
+    showingPreview = true;
+    refreshResponsePane();
   };
   const hidePreview = (): void => {
-    preview?.remove();
-    preview = null;
+    if (!showingPreview) {
+      return;
+    }
+    state.variablePreview = null;
+    showingPreview = false;
+    refreshResponsePane();
   };
   input.addEventListener('input', () => {
     onInput(input.value);
     applyClass();
-    if (preview) {
+    updateSuggestions();
+    if (showingPreview) {
       showPreview();
     }
   });
   input.addEventListener('focus', showPreview);
-  input.addEventListener('blur', hidePreview);
-  return input;
+  input.addEventListener('blur', () => {
+    hidePreview();
+    closeSuggestions();
+  });
+  input.addEventListener('scroll', syncScroll);
+  input.addEventListener('keydown', (event) => {
+    const ev = event as KeyboardEvent;
+    if (suggestions.classList.contains('open')) {
+      const count = suggestions.childElementCount;
+      if ((ev.key === 'ArrowDown' || ev.key === 'ArrowUp') && count > 0) {
+        ev.preventDefault();
+        suggestionIndex = (suggestionIndex + (ev.key === 'ArrowDown' ? 1 : count - 1)) % count;
+        updateSuggestions();
+        return;
+      }
+      if ((ev.key === 'Enter' || ev.key === 'Tab') && count > 0) {
+        ev.preventDefault();
+        const path = suggestions.children[suggestionIndex]?.querySelector('.path')?.textContent?.slice(2);
+        if (path) chooseSuggestion(path);
+        return;
+      }
+      if (ev.key === 'Escape') {
+        ev.preventDefault();
+        closeSuggestions();
+        return;
+      }
+    }
+    if (ev.key === 'Backspace' && input.selectionStart === input.selectionEnd && input.selectionStart !== null) {
+      const caret = input.selectionStart;
+      for (const match of input.value.matchAll(VAR_TOKEN_RE)) {
+        const start = match.index ?? 0;
+        const end = start + match[0].length;
+        if (caret > start && caret <= end) {
+          ev.preventDefault();
+          input.setRangeText('', start, end, 'end');
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+          break;
+        }
+      }
+    }
+  });
+  return wrapper;
 }
 
 // ---- KV 表格（params / headers / form body 共用） ----
@@ -163,6 +330,13 @@ function paramsTab(request: RequestItem): HTMLElement {
   return box;
 }
 
+const TEXT_FORMATTERS: Record<string, (text: string) => string> = {
+  'application/json': prettyJson,
+  'application/graphql': prettyJson,
+  'application/xml': prettyXml,
+  'application/yaml': prettyYaml,
+};
+
 function bodyTab(request: RequestItem): HTMLElement {
   const box = el('div', { class: 'body-editor' });
   const select = el('select', {
@@ -181,10 +355,42 @@ function bodyTab(request: RequestItem): HTMLElement {
       el('option', { value, ...((request.body.mimeType ?? '') === value ? { selected: 'selected' } : {}) }, label),
     );
   }
-  box.append(el('div', {}, select));
-
   const mime = request.body.mimeType ?? '';
-  if (mime === 'application/x-www-form-urlencoded' || mime === 'multipart/form-data') {
+  // 美化按鈕要能拿到稍後才建立的 textarea，靠這個變數在 click 當下取值
+  let field: HTMLElement | null = null;
+  const toolbar = el('div', { class: 'body-toolbar' }, select);
+  const isForm = mime === 'application/x-www-form-urlencoded' || mime === 'multipart/form-data';
+  const formatter = TEXT_FORMATTERS[mime];
+  if (isForm || formatter) {
+    toolbar.append(
+      el('button', {
+        class: 'secondary',
+        title: isForm ? '依欄位名稱排序' : '重新排版（內容需合法）',
+        onclick: () => {
+          if (isForm) {
+            request.body.params?.sort((a, b) => a.name.localeCompare(b.name));
+            touch();
+            render();
+            return;
+          }
+          const textarea = field?.querySelector('textarea');
+          if (!textarea) {
+            return;
+          }
+          try {
+            textarea.value = formatter(textarea.value);
+            // 交給 varField 既有的 input handler 更新 model、變數標示與預覽
+            textarea.dispatchEvent(new Event('input', { bubbles: true }));
+          } catch (err) {
+            notice('error', `無法美化：${err instanceof Error ? err.message : String(err)}`);
+          }
+        },
+      }, '美化'),
+    );
+  }
+  box.append(toolbar);
+
+  if (isForm) {
     request.body.params = request.body.params ?? [];
     box.append(kvTable<BodyParam>(request.body.params, () => ({ name: '', value: '' }), touch));
     if (mime === 'multipart/form-data') {
@@ -201,13 +407,11 @@ function bodyTab(request: RequestItem): HTMLElement {
       ),
     );
   } else if (mime !== '') {
-    const textarea = el('textarea', { spellcheck: false, placeholder: mime === 'application/graphql' ? '{"query": "...", "variables": {}}' : '' });
-    textarea.value = request.body.text ?? '';
-    textarea.addEventListener('input', () => {
-      request.body.text = textarea.value;
+    field = varTextarea(request.body.text ?? '', (value) => {
+      request.body.text = value;
       touch();
-    });
-    box.append(textarea);
+    }, { placeholder: mime === 'application/graphql' ? '{"query": "...", "variables": {}}' : '' });
+    box.append(field);
   } else {
     box.append(el('div', { class: 'hint' }, '此 request 不帶 body。'));
   }
@@ -306,7 +510,7 @@ function headersTab(request: RequestItem): HTMLElement {
 }
 
 function docsTab(request: RequestItem): HTMLElement {
-  const textarea = el('textarea', { placeholder: '此 request 的描述（匯出為 OpenAPI description）', style: 'width:100%;height:100%;min-height:180px' });
+  const textarea = el('textarea', { class: 'docs-editor', placeholder: '此 request 的描述（匯出為 OpenAPI description）' });
   textarea.value = request.description ?? '';
   textarea.addEventListener('input', () => {
     if (textarea.value === '') {

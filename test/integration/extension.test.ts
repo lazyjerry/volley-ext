@@ -23,6 +23,7 @@ suite('extension activation', () => {
       'volley.importCurl',
       'volley.exportInsomniaYaml',
       'volley.exportOpenApi',
+      'volley.chooseDataFolder',
       'volley.openDataFolder',
       'volley.reload',
     ]) {
@@ -33,6 +34,7 @@ suite('extension activation', () => {
   test('設定項存在且有預設值', () => {
     const config = vscode.workspace.getConfiguration('volley');
     assert.strictEqual(config.get('dataFolder'), '');
+    assert.strictEqual(config.get('privateDataFolder'), '');
     assert.strictEqual(config.get('requestTimeoutMs'), 30000);
     assert.strictEqual(config.get('responseHistoryLimit'), 20);
   });

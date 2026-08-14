@@ -41,7 +41,8 @@ export interface AppState {
   sending: Set<string>;
   historyByRequest: Map<string, ResponseRecord[]>;
   fullBodyByResponseId: Map<string, string>;
-  envEditor: null | { target: 'collection' | { folderId: string }; selectedEnvId: string | 'base'; rawMode: boolean };
+  variablePreview: { result: string; missing: string[] } | null;
+  envEditor: null | { target: 'collection' | { folderId: string }; selectedEnvId: string | 'base'; rawMode: boolean; dirty: boolean };
   renamingNodeId: string | null;
   notice: { level: string; message: string } | null;
 }
@@ -60,6 +61,7 @@ export const state: AppState = {
   sending: new Set(),
   historyByRequest: new Map(),
   fullBodyByResponseId: new Map(),
+  variablePreview: null,
   envEditor: null,
   renamingNodeId: null,
   notice: null,
@@ -75,13 +77,31 @@ export function render(): void {
   renderFn();
 }
 
+export function notice(level: string, message: string): void {
+  state.notice = { level, message };
+  render();
+  setTimeout(() => {
+    if (state.notice?.message === message) {
+      state.notice = null;
+      render();
+    }
+  }, 6000);
+}
+
 // ---- 持久化 ----
 
 let persistTimer: ReturnType<typeof setTimeout> | undefined;
+let pendingCollection: Collection | undefined;
 let uiTimer: ReturnType<typeof setTimeout> | undefined;
+let pendingUi: { collectionId: string; state: UiState } | undefined;
+let editRevision = 0;
 
 export function hasPendingEdits(): boolean {
   return persistTimer !== undefined;
+}
+
+export function getEditRevision(): number {
+  return editRevision;
 }
 
 /** 模型變更後呼叫：更新 modified 並 debounce 回存。 */
@@ -91,13 +111,37 @@ export function touch(): void {
     return;
   }
   collection.modified = Date.now();
+  editRevision++;
+  pendingCollection = collection;
   if (persistTimer) {
     clearTimeout(persistTimer);
   }
   persistTimer = setTimeout(() => {
     persistTimer = undefined;
-    post({ type: 'updateCollection', collection: JSON.parse(JSON.stringify(collection)) as Collection });
+    persistPendingEdits();
   }, 300);
+}
+
+function persistPendingEdits(): void {
+  const collection = pendingCollection;
+  pendingCollection = undefined;
+  if (collection) {
+    post({ type: 'updateCollection', collection: JSON.parse(JSON.stringify(collection)) as Collection });
+  }
+}
+
+/** webview 離開前立即送出 debounce 中的編輯。 */
+export function flushPendingEdits(): void {
+  if (persistTimer) {
+    clearTimeout(persistTimer);
+    persistTimer = undefined;
+  }
+  persistPendingEdits();
+  if (uiTimer) {
+    clearTimeout(uiTimer);
+    uiTimer = undefined;
+  }
+  persistPendingUi();
 }
 
 export function touchUi(): void {
@@ -108,10 +152,19 @@ export function touchUi(): void {
   if (uiTimer) {
     clearTimeout(uiTimer);
   }
+  pendingUi = { collectionId: collection.id, state: JSON.parse(JSON.stringify(state.ui)) as UiState };
   uiTimer = setTimeout(() => {
     uiTimer = undefined;
-    post({ type: 'updateUiState', collectionId: collection.id, state: state.ui });
+    persistPendingUi();
   }, 300);
+}
+
+function persistPendingUi(): void {
+  const update = pendingUi;
+  pendingUi = undefined;
+  if (update) {
+    post({ type: 'updateUiState', ...update });
+  }
 }
 
 // ---- 樹操作 ----
@@ -161,8 +214,8 @@ function renumber(list: TreeNode[]): void {
   });
 }
 
-/** 移動節點：position 'into' = 進資料夾末端；'before' = 目標之前。 */
-export function moveNode(sourceId: string, targetId: string, position: 'into' | 'before'): boolean {
+/** 移動節點：position 'into' = 進資料夾末端；'before' / 'after' = 目標的前／後。 */
+export function moveNode(sourceId: string, targetId: string, position: 'into' | 'before' | 'after'): boolean {
   const collection = state.collection;
   if (!collection || sourceId === targetId) {
     return false;
@@ -183,7 +236,8 @@ export function moveNode(sourceId: string, targetId: string, position: 'into' | 
   } else {
     const list = findParentList(collection.children, targetId) ?? collection.children;
     const idx = list.findIndex((n) => n.id === targetId);
-    list.splice(idx < 0 ? list.length : idx, 0, source);
+    const at = idx < 0 ? list.length : position === 'after' ? idx + 1 : idx;
+    list.splice(at, 0, source);
     renumber(list);
   }
   touch();

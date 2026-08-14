@@ -5,8 +5,11 @@ import { isHostMessage } from '../shared/protocol';
 import { emptyUiState } from '../core/model/types';
 import {
   el,
+  flushPendingEdits,
+  getEditRevision,
   hasPendingEdits,
   insertNode,
+  notice,
   post,
   render,
   selectedRequest,
@@ -17,7 +20,7 @@ import {
   vscode,
 } from './store';
 import { applyColumnWidths, applyLayoutClass, initLayout, initSplitters } from './layout';
-import { renderSidebar } from './render/sidebar';
+import { applyFolderDelete, renderSidebar } from './render/sidebar';
 import { renderRequestPane } from './render/requestPane';
 import { renderResponsePane } from './render/responsePane';
 import { renderEnvEditor } from './render/envEditor';
@@ -26,6 +29,7 @@ function buildSkeleton(): void {
   const app = document.getElementById('app')!;
   app.replaceChildren(
     el('div', { id: 'notice-bar' }),
+    el('div', { id: 'autosave-toast', role: 'status', 'aria-live': 'polite' }, '已自動保存'),
     el('div', { id: 'tabbar' }),
     el(
       'div',
@@ -37,6 +41,55 @@ function buildSkeleton(): void {
       el('div', { id: 'pane-response', class: 'pane' }),
     ),
   );
+}
+
+let autosaveToastTimer: ReturnType<typeof setTimeout> | undefined;
+
+function showAutosaveToast(): void {
+  const toast = document.getElementById('autosave-toast');
+  if (!toast) {
+    return;
+  }
+  if (autosaveToastTimer) {
+    clearTimeout(autosaveToastTimer);
+  }
+  toast.classList.add('visible');
+  autosaveToastTimer = setTimeout(() => {
+    toast.classList.remove('visible');
+    autosaveToastTimer = undefined;
+  }, 2000);
+}
+
+function initAutosaveFeedback(): void {
+  const focusedRevisions = new WeakMap<HTMLInputElement | HTMLTextAreaElement, number>();
+  const editableField = (target: EventTarget | null): HTMLInputElement | HTMLTextAreaElement | null => {
+    if (target instanceof HTMLTextAreaElement) {
+      return target.readOnly || target.disabled ? null : target;
+    }
+    if (target instanceof HTMLInputElement && target.type === 'text') {
+      return target.readOnly || target.disabled ? null : target;
+    }
+    return null;
+  };
+
+  document.addEventListener('focusin', (ev) => {
+    const field = editableField(ev.target);
+    if (field) {
+      focusedRevisions.set(field, getEditRevision());
+    }
+  });
+  document.addEventListener('focusout', (ev) => {
+    const field = editableField(ev.target);
+    if (!field) {
+      return;
+    }
+    const revisionAtFocus = focusedRevisions.get(field);
+    focusedRevisions.delete(field);
+    if (revisionAtFocus !== undefined && getEditRevision() > revisionAtFocus) {
+      flushPendingEdits();
+      showAutosaveToast();
+    }
+  });
 }
 
 function renderTabbar(): void {
@@ -71,10 +124,10 @@ function renderTabbar(): void {
 function renderNotices(): void {
   const bar = document.getElementById('notice-bar')!;
   bar.replaceChildren();
-  if (state.config?.isFallbackDataFolder) {
+  if (state.config?.dataFolders.shared.isFallback) {
     bar.append(
       el('div', { class: 'notice warn' },
-        '未設定同步資料夾（volley.dataFolder）——資料僅存於本機延伸模組空間，不會跨裝置同步。',
+        '未設定共用資料夾（volley.dataFolder）——資料僅存於本機延伸模組空間，不會跨裝置同步。可從「更多…→選擇共用資料夾…」設定。',
       ),
     );
   }
@@ -108,17 +161,6 @@ function fullRender(): void {
     requestTab: state.requestTab,
     responseTab: state.responseTab,
   });
-}
-
-function notice(level: string, message: string): void {
-  state.notice = { level, message };
-  render();
-  setTimeout(() => {
-    if (state.notice?.message === message) {
-      state.notice = null;
-      render();
-    }
-  }, 6000);
 }
 
 function handleHostMessage(message: HostMessage): void {
@@ -193,6 +235,9 @@ function handleHostMessage(message: HostMessage): void {
       render();
       break;
     }
+    case 'folderDeleteConfirmed':
+      applyFolderDelete(message.folderId, message.mode);
+      break;
     case 'curlExported':
       // 已由 extension 端複製到剪貼簿；此處僅提示
       break;
@@ -207,6 +252,7 @@ function boot(): void {
   setRenderFn(fullRender);
   initLayout();
   initSplitters();
+  initAutosaveFeedback();
 
   const saved = vscode.getState() as { narrowTab?: typeof state.narrowTab; requestTab?: string; responseTab?: string } | undefined;
   if (saved?.narrowTab) {
@@ -224,6 +270,8 @@ function boot(): void {
       handleHostMessage(ev.data as HostMessage);
     }
   });
+
+  window.addEventListener('pagehide', flushPendingEdits);
 
   // Send 快捷鍵：Cmd/Ctrl+Enter
   window.addEventListener('keydown', (ev) => {

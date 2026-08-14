@@ -6,15 +6,14 @@ import { buildRequest } from '../core/http/buildRequest';
 import { sendRequest } from '../core/http/httpClient';
 import { importCurl } from '../core/formats/curlImport';
 import { exportCurl } from '../core/formats/curlExport';
-import type { CollectionStore } from '../storage/collectionStore';
-import type { StateStore } from '../storage/stateStore';
-import type { ClientConfig, ClientMessage, HostMessage } from '../shared/protocol';
+import type { DualCollectionStore, DualStateStore } from '../storage/dualStore';
+import type { ClientConfig, ClientMessage, DataFolderInfo, HostMessage } from '../shared/protocol';
 import { isClientMessage } from '../shared/protocol';
 
 export interface ProviderDeps {
-  collectionStore: CollectionStore;
-  stateStore: StateStore;
-  getDataFolderInfo: () => { path: string; isFallback: boolean; conflictedCopies: string[] };
+  collectionStore: DualCollectionStore;
+  stateStore: DualStateStore;
+  getDataFolderInfo: () => { shared: DataFolderInfo; private: DataFolderInfo; conflictedCopies: string[] };
 }
 
 export class ClientViewProvider implements vscode.WebviewViewProvider, vscode.Disposable {
@@ -98,8 +97,7 @@ export class ClientViewProvider implements vscode.WebviewViewProvider, vscode.Di
   sendInit(): void {
     const info = this.deps.getDataFolderInfo();
     const config: ClientConfig = {
-      dataFolderPath: info.path,
-      isFallbackDataFolder: info.isFallback,
+      dataFolders: { shared: info.shared, private: info.private },
       requestTimeoutMs: this.getConfig<number>('requestTimeoutMs', 30000),
       responseHistoryLimit: this.getConfig<number>('responseHistoryLimit', 20),
     };
@@ -132,8 +130,67 @@ export class ClientViewProvider implements vscode.WebviewViewProvider, vscode.Di
         this.openCollection(message.collectionId);
         break;
       case 'createCollection':
-        await vscode.commands.executeCommand('volley.newCollection', message.name);
+        await vscode.commands.executeCommand('volley.newCollection', message.name, message.source);
         break;
+      case 'openDataFolder':
+        await vscode.commands.executeCommand('volley.openDataFolder', message.source);
+        break;
+      case 'chooseDataFolder':
+        await vscode.commands.executeCommand('volley.chooseDataFolder', message.source);
+        break;
+      case 'renameCollection': {
+        const target = collectionStore.get(message.collectionId);
+        if (!target) {
+          break;
+        }
+        const name = await vscode.window.showInputBox({
+          prompt: 'Collection 名稱',
+          value: target.name,
+          validateInput: (value) => value.trim() === '' ? '名稱不能為空' : undefined,
+        });
+        const trimmedName = name?.trim();
+        if (!trimmedName || trimmedName === target.name) {
+          break;
+        }
+        const renamed = JSON.parse(JSON.stringify(target)) as Collection;
+        renamed.name = trimmedName;
+        renamed.modified = Date.now();
+        collectionStore.update(renamed);
+        this.openCollection(renamed.id);
+        break;
+      }
+      case 'confirmDeleteFolder': {
+        const total = message.requestCount + message.folderCount;
+        const detail = message.folderCount > 0
+          ? `內含 ${message.requestCount} 個 request、${message.folderCount} 個子資料夾。`
+          : `內含 ${message.requestCount} 個 request。`;
+        const deleteAll = `連同內容一起刪除（${total} 項）`;
+        const keepChildren = '只刪資料夾，內容移到上一層';
+        const choice = await vscode.window.showWarningMessage(
+          `刪除資料夾「${message.name}」？`,
+          { modal: true, detail },
+          deleteAll,
+          keepChildren,
+        );
+        if (choice === deleteAll || choice === keepChildren) {
+          this.post({
+            type: 'folderDeleteConfirmed',
+            folderId: message.folderId,
+            mode: choice === deleteAll ? 'all' : 'folderOnly',
+          });
+        }
+        break;
+      }
+      case 'showNotice': {
+        if (message.level === 'error') {
+          void vscode.window.showErrorMessage(message.message);
+        } else if (message.level === 'warn') {
+          void vscode.window.showWarningMessage(message.message);
+        } else {
+          void vscode.window.showInformationMessage(message.message);
+        }
+        break;
+      }
       case 'deleteCollection': {
         const target = collectionStore.get(message.collectionId);
         const choice = await vscode.window.showWarningMessage(
@@ -220,15 +277,14 @@ export class ClientViewProvider implements vscode.WebviewViewProvider, vscode.Di
       this.notice('error', '找不到 request');
       return;
     }
-    const uiState = stateStore.loadUiState(collectionId);
-    const folderChain = findFolderChain(collection.children, requestId);
-    const env = resolveEnvironment(collection, uiState.activeEnvironmentId, folderChain);
-    const built = buildRequest(request, env, folderChain);
-
     const controller = new AbortController();
     this.inFlight.set(requestId, controller);
     this.post({ type: 'responseStarted', requestId });
     try {
+      const uiState = stateStore.loadUiState(collectionId);
+      const folderChain = findFolderChain(collection.children, requestId);
+      const env = resolveEnvironment(collection, uiState.activeEnvironmentId, folderChain);
+      const built = buildRequest(request, env, folderChain);
       const { record, fullBody } = await sendRequest(
         request,
         built,
@@ -260,6 +316,38 @@ export class ClientViewProvider implements vscode.WebviewViewProvider, vscode.Di
         history,
         cookieJar: current.cookieJar,
       });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const record = {
+        id: `res_${Date.now().toString(16)}${Math.floor(Math.random() * 0xffff).toString(16)}`,
+        requestId,
+        at: Date.now(),
+        durationMs: 0,
+        method: request.method,
+        url: request.url,
+        status: 0,
+        statusText: '',
+        requestHeaders: [],
+        responseHeaders: [],
+        bodyEncoding: 'utf8' as const,
+        body: '',
+        bodySize: 0,
+        bodyTruncated: false,
+        error: message,
+      };
+      const history = stateStore.appendResponse(
+        collectionId,
+        record,
+        this.getConfig<number>('responseHistoryLimit', 20),
+      );
+      this.post({
+        type: 'responseFinished',
+        requestId,
+        record,
+        fullBody: '',
+        history,
+        cookieJar: collection.cookieJar,
+      });
     } finally {
       this.inFlight.delete(requestId);
     }
@@ -277,6 +365,7 @@ export class ClientViewProvider implements vscode.WebviewViewProvider, vscode.Di
   private getHtml(webview: vscode.Webview): string {
     const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', 'main.js'));
     const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', 'styles.css'));
+    const codiconUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', 'codicon', 'codicon.css'));
     const nonce = createNonce();
     return `<!DOCTYPE html>
 <html lang="zh-Hant">
@@ -285,6 +374,7 @@ export class ClientViewProvider implements vscode.WebviewViewProvider, vscode.Di
   <meta http-equiv="Content-Security-Policy"
     content="default-src 'none'; style-src ${webview.cspSource}; script-src 'nonce-${nonce}'; font-src ${webview.cspSource};">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="${codiconUri}" rel="stylesheet">
   <link href="${styleUri}" rel="stylesheet">
   <title>Volley</title>
 </head>

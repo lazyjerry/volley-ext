@@ -2,19 +2,46 @@
 // 左列：Base + sub-environments（新增/刪除/改名/設色）；右側：變數表格或原始 JSON。
 // 資料夾層級變數由資料夾右鍵進入，編輯該資料夾的 environment 物件。
 
-import type { SubEnvironment } from '../../core/model/types';
 import { isFolder } from '../../core/model/types';
-import { genId } from '../../core/model/ids';
-import { el, findNode, render, state, touch } from '../store';
+import { el, findNode, flushPendingEdits, render, state, touch, touchUi } from '../store';
 
 export function openEnvEditor(target: 'collection' | { folderId: string }): void {
-  state.envEditor = { target, selectedEnvId: 'base', rawMode: false };
+  state.envEditor = { target, selectedEnvId: 'base', rawMode: false, dirty: false };
   render();
 }
 
 export function closeEnvEditor(): void {
+  if (state.envEditor?.dirty) {
+    flushPendingEdits();
+  }
   state.envEditor = null;
   render();
+}
+
+/**
+ * 編輯器內任何變動時呼叫：關閉鈕由 x 換成儲存圖示。
+ * 輸入中不做全量 render（避免失焦），直接就地改圖示。
+ */
+function markDirty(): void {
+  const editor = state.envEditor;
+  if (!editor || editor.dirty) {
+    return;
+  }
+  editor.dirty = true;
+  for (const btn of document.querySelectorAll<HTMLButtonElement>('#env-editor .env-close')) {
+    btn.title = '儲存並關閉';
+    btn.querySelector('.codicon')?.classList.replace('codicon-close', 'codicon-save');
+  }
+}
+
+/** 關閉鈕：有變動 = 儲存圖示、無變動 = x 圖示。 */
+function closeButton(): HTMLElement {
+  const dirty = state.envEditor?.dirty ?? false;
+  return el('button', {
+    class: 'icon env-close',
+    title: dirty ? '儲存並關閉' : '關閉（無變更）',
+    onclick: closeEnvEditor,
+  }, el('span', { class: `codicon codicon-${dirty ? 'save' : 'close'}` }));
 }
 
 function targetData(): { data: Record<string, unknown>; setData: (d: Record<string, unknown>) => void } | null {
@@ -59,27 +86,37 @@ function targetData(): { data: Record<string, unknown>; setData: (d: Record<stri
 function envList(): HTMLElement {
   const editor = state.envEditor!;
   const collection = state.collection!;
+  const removeSelected = (): void => {
+    if (editor.selectedEnvId === 'base') {
+      return;
+    }
+    const idx = collection.environments.subEnvironments.findIndex((s) => s.id === editor.selectedEnvId);
+    if (idx < 0) {
+      return;
+    }
+    collection.environments.subEnvironments.splice(idx, 1);
+    if (state.ui.activeEnvironmentId === editor.selectedEnvId) {
+      state.ui.activeEnvironmentId = null;
+      touchUi();
+    }
+    editor.selectedEnvId = 'base';
+    touch();
+    markDirty();
+    render();
+  };
   const box = el('div', { class: 'env-list' });
+  // 新增環境改由 sidebar 的環境選擇器（輸入名稱後選「＋ 新增環境」）
   box.append(
     el('div', { class: 'pane-toolbar' },
       el('span', { style: 'font-weight:600' }, '環境'),
       el('button', {
         class: 'icon',
-        title: '新增 sub-environment',
+        title: editor.selectedEnvId === 'base' ? 'Base Environment 不可移除' : '移除選取的環境',
+        disabled: editor.selectedEnvId === 'base',
         style: 'margin-left:auto',
-        onclick: () => {
-          const sub: SubEnvironment = {
-            id: genId('env'),
-            name: `Environment ${collection.environments.subEnvironments.length + 1}`,
-            color: null,
-            data: {},
-          };
-          collection.environments.subEnvironments.push(sub);
-          editor.selectedEnvId = sub.id;
-          touch();
-          render();
-        },
-      }, '＋'),
+        onclick: removeSelected,
+      }, '−'),
+      closeButton(),
     ),
   );
   const items = el('div', { class: 'items' });
@@ -128,14 +165,14 @@ function kvEditor(data: Record<string, unknown>, setData: (d: Record<string, unk
     }
     setData(next);
     touch();
+    markDirty();
   };
   entries.forEach(([key, value], idx) => {
     const isComplex = typeof value === 'object' && value !== null;
     const keyInput = el('input', { type: 'text', class: 'k', value: key, spellcheck: false });
-    keyInput.addEventListener('change', () => {
+    keyInput.addEventListener('input', () => {
       entries[idx] = [keyInput.value, entries[idx][1]];
       rebuild(entries);
-      render();
     });
     const valueInput = el('input', {
       type: 'text',
@@ -144,7 +181,7 @@ function kvEditor(data: Record<string, unknown>, setData: (d: Record<string, unk
       value: isComplex ? JSON.stringify(value) : String(value ?? ''),
       title: isComplex ? '巢狀值：以 JSON 編輯' : '',
     });
-    valueInput.addEventListener('change', () => {
+    valueInput.addEventListener('input', () => {
       let parsed: unknown = valueInput.value;
       if (isComplex || /^[[{]/.test(valueInput.value.trim())) {
         try {
@@ -208,43 +245,26 @@ export function renderEnvEditor(): HTMLElement | null {
     const sub = collection.environments.subEnvironments.find((s) => s.id === editor.selectedEnvId);
     if (sub) {
       const nameInput = el('input', { type: 'text', value: sub.name, spellcheck: false });
-      nameInput.addEventListener('change', () => {
+      nameInput.addEventListener('input', () => {
         sub.name = nameInput.value;
         touch();
-        render();
+        markDirty();
       });
       const colorInput = el('input', { type: 'text', value: sub.color ?? '', placeholder: '#8abc39', style: 'width:90px', spellcheck: false });
-      colorInput.addEventListener('change', () => {
+      colorInput.addEventListener('input', () => {
         sub.color = colorInput.value || null;
         touch();
-        render();
+        markDirty();
       });
-      toolbar.append(
-        nameInput,
-        colorInput,
-        el('button', {
-          class: 'secondary',
-          onclick: () => {
-            const idx = collection.environments.subEnvironments.findIndex((s) => s.id === sub.id);
-            if (idx >= 0) {
-              collection.environments.subEnvironments.splice(idx, 1);
-            }
-            if (state.ui.activeEnvironmentId === sub.id) {
-              state.ui.activeEnvironmentId = null;
-            }
-            editor.selectedEnvId = 'base';
-            touch();
-            render();
-          },
-        }, '刪除此環境'),
-      );
+      toolbar.append(nameInput, colorInput);
     }
   } else if (isCollectionTarget) {
     const base = collection.environments.base;
     const nameInput = el('input', { type: 'text', value: base.name, spellcheck: false });
-    nameInput.addEventListener('change', () => {
+    nameInput.addEventListener('input', () => {
       base.name = nameInput.value;
       touch();
+      markDirty();
     });
     toolbar.append(nameInput);
   } else {
@@ -261,8 +281,11 @@ export function renderEnvEditor(): HTMLElement | null {
         render();
       },
     }, editor.rawMode ? '表格編輯' : '原始 JSON'),
-    el('button', { onclick: closeEnvEditor }, '完成'),
   );
+  if (!isCollectionTarget) {
+    // 資料夾變數編輯沒有左側環境清單，關閉鈕放在這裡
+    toolbar.append(closeButton());
+  }
   detail.append(toolbar);
 
   const body = el('div', { class: 'pane-body' });
@@ -271,12 +294,13 @@ export function renderEnvEditor(): HTMLElement | null {
   } else if (editor.rawMode) {
     const textarea = el('textarea', { class: 'raw', spellcheck: false });
     textarea.value = JSON.stringify(target.data, null, 2);
-    const hint = el('div', { class: 'hint' }, '直接編輯 JSON；離開欄位時套用（不合法 JSON 不套用）。');
-    textarea.addEventListener('change', () => {
+    const hint = el('div', { class: 'hint' }, '直接編輯 JSON；輸入時套用（不合法 JSON 不套用）。');
+    textarea.addEventListener('input', () => {
       try {
         const parsed = JSON.parse(textarea.value) as Record<string, unknown>;
         target.setData(parsed);
         touch();
+        markDirty();
         hint.textContent = '已套用。';
       } catch (err) {
         hint.textContent = `JSON 不合法：${err instanceof Error ? err.message : String(err)}`;

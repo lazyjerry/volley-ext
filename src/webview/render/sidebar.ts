@@ -1,6 +1,7 @@
 // Sidebar：collection 選擇器、環境選擇器、資料夾/請求樹（增刪改、拖曳、右鍵選單）。
 
-import type { Folder, RequestItem, TreeNode } from '../../core/model/types';
+import type { Folder, RequestItem, SubEnvironment, TreeNode } from '../../core/model/types';
+import type { ClientMessage } from '../../shared/protocol';
 import { defaultSettings, isFolder } from '../../core/model/types';
 import { genId } from '../../core/model/ids';
 import {
@@ -16,6 +17,20 @@ import {
   touchUi,
 } from '../store';
 import { openEnvEditor } from './envEditor';
+import { combobox } from './combobox';
+
+function codicon(name: string): HTMLElement {
+  return el('span', { class: `codicon codicon-${name}` });
+}
+
+// 無 collection 時按鈕保持可見，點擊改以警告視窗提示
+function requireCollection(action: () => void): void {
+  if (!state.collection) {
+    post({ type: 'showNotice', level: 'warn', message: '尚無 collection，請先建立 collection 再使用此功能。' });
+    return;
+  }
+  action();
+}
 
 export function newRequest(folderId: string | null): void {
   const request: RequestItem = {
@@ -94,6 +109,70 @@ function duplicateRequest(id: string): void {
   const idx = list.findIndex((n) => n.id === id);
   list.splice(idx + 1, 0, copy);
   list.forEach((n, i) => (n.sortKey = i));
+  touch();
+  render();
+}
+
+function countDescendants(folder: Folder): { requestCount: number; folderCount: number } {
+  let requestCount = 0;
+  let folderCount = 0;
+  const walk = (nodes: TreeNode[]): void => {
+    for (const n of nodes) {
+      if (isFolder(n)) {
+        folderCount++;
+        walk(n.children);
+      } else {
+        requestCount++;
+      }
+    }
+  };
+  walk(folder.children);
+  return { requestCount, folderCount };
+}
+
+/** 資料夾刪除：空資料夾直接刪，有內容則交由 host 端 modal 確認要不要連內容一起刪。 */
+function deleteFolder(folder: Folder): void {
+  if (folder.children.length === 0) {
+    deleteNode(folder.id);
+    return;
+  }
+  const { requestCount, folderCount } = countDescendants(folder);
+  post({ type: 'confirmDeleteFolder', folderId: folder.id, name: folder.name, requestCount, folderCount });
+}
+
+export function applyFolderDelete(folderId: string, mode: 'all' | 'folderOnly'): void {
+  const collection = state.collection;
+  if (!collection) {
+    return;
+  }
+  const node = findNode(collection.children, folderId);
+  if (!node || !isFolder(node)) {
+    return;
+  }
+  if (mode === 'folderOnly') {
+    const list = findParentListOf(folderId) ?? collection.children;
+    const idx = list.findIndex((n) => n.id === folderId);
+    list.splice(idx, 1, ...node.children);
+    list.forEach((n, i) => (n.sortKey = i));
+    touch();
+    render();
+    return;
+  }
+  const removedIds = new Set<string>();
+  const collect = (nodes: TreeNode[]): void => {
+    for (const n of nodes) {
+      removedIds.add(n.id);
+      if (isFolder(n)) {
+        collect(n.children);
+      }
+    }
+  };
+  collect([node]);
+  removeNode(collection.children, folderId);
+  if (state.ui.selectedRequestId && removedIds.has(state.ui.selectedRequestId)) {
+    state.ui.selectedRequestId = null;
+    touchUi();
+  }
   touch();
   render();
 }
@@ -177,7 +256,7 @@ function nodeMenu(node: TreeNode, ev: MouseEvent): void {
       { label: '重新命名', action: () => { state.renamingNodeId = node.id; render(); } },
       { label: '編輯資料夾變數', action: () => openEnvEditor({ folderId: node.id }) },
       { sep: true, label: '' },
-      { label: '刪除', danger: true, action: () => deleteNode(node.id) },
+      { label: '刪除資料夾', danger: true, action: () => deleteFolder(node) },
     );
   } else {
     items.push(
@@ -211,6 +290,8 @@ function renameInput(node: TreeNode): HTMLElement {
     state.renamingNodeId = null;
     render();
   };
+  // 不讓點擊冒泡到 tree-row，避免改名時誤觸資料夾展開／收合
+  input.addEventListener('click', (ev) => ev.stopPropagation());
   input.addEventListener('keydown', (ev) => {
     if (ev.key === 'Enter') {
       commit();
@@ -227,24 +308,85 @@ function renameInput(node: TreeNode): HTMLElement {
   return input;
 }
 
+type DropPosition = 'before' | 'into' | 'after';
+
+/** 拖放落點：request 以中線分上下；資料夾上下各 1/4 為排序、中間為放入。 */
+function dropPosition(row: HTMLElement, node: TreeNode, ev: DragEvent): DropPosition {
+  const rect = row.getBoundingClientRect();
+  const ratio = rect.height > 0 ? (ev.clientY - rect.top) / rect.height : 0.5;
+  if (isFolder(node)) {
+    if (ratio < 0.25) {
+      return 'before';
+    }
+    return ratio > 0.75 ? 'after' : 'into';
+  }
+  return ratio < 0.5 ? 'before' : 'after';
+}
+
+function clearDropHint(row: HTMLElement): void {
+  row.classList.remove('drop-before', 'drop-after', 'drop-into');
+}
+
+// 拖曳中的來源 id：dataTransfer 在 dragover 階段讀不到值，另外記一份用來擋自我拖放
+let draggingNodeId: string | null = null;
+
 function setupDrag(row: HTMLElement, node: TreeNode): void {
+  let expandTimer: ReturnType<typeof setTimeout> | undefined;
+  const cancelExpand = (): void => {
+    if (expandTimer) {
+      clearTimeout(expandTimer);
+      expandTimer = undefined;
+    }
+  };
+
   row.draggable = true;
   row.addEventListener('dragstart', (ev) => {
+    draggingNodeId = node.id;
     ev.dataTransfer?.setData('text/node-id', node.id);
     ev.dataTransfer!.effectAllowed = 'move';
+    row.classList.add('dragging');
+  });
+  row.addEventListener('dragend', () => {
+    draggingNodeId = null;
+    row.classList.remove('dragging');
+    clearDropHint(row);
+    cancelExpand();
   });
   row.addEventListener('dragover', (ev) => {
+    if (draggingNodeId === node.id) {
+      return;
+    }
     ev.preventDefault();
-    row.classList.add('drop-target');
+    ev.stopPropagation();
+    ev.dataTransfer!.dropEffect = 'move';
+    const position = dropPosition(row, node, ev);
+    clearDropHint(row);
+    row.classList.add(`drop-${position}`);
+    // 停留在收合的資料夾上 → 自動展開，方便拖進巢狀層
+    if (position === 'into' && !state.ui.expandedFolders.includes(node.id)) {
+      expandTimer ??= setTimeout(() => {
+        expandTimer = undefined;
+        state.ui.expandedFolders.push(node.id);
+        touchUi();
+        render();
+      }, 600);
+    } else {
+      cancelExpand();
+    }
   });
-  row.addEventListener('dragleave', () => row.classList.remove('drop-target'));
+  row.addEventListener('dragleave', () => {
+    clearDropHint(row);
+    cancelExpand();
+  });
   row.addEventListener('drop', (ev) => {
     ev.preventDefault();
     ev.stopPropagation();
-    row.classList.remove('drop-target');
+    clearDropHint(row);
+    cancelExpand();
     const sourceId = ev.dataTransfer?.getData('text/node-id');
+    draggingNodeId = null;
     if (sourceId) {
-      moveNode(sourceId, node.id, isFolder(node) ? 'into' : 'before');
+      moveNode(sourceId, node.id, dropPosition(row, node, ev));
       render();
     }
   });
@@ -270,11 +412,13 @@ function renderNode(node: TreeNode): HTMLElement {
           render();
         },
       },
-      el('span', { class: 'twisty' }, expanded ? '▾' : '▸'),
-      el('span', { class: 'twisty' }, '🗀'),
+      el('span', { class: 'twisty' }, codicon(expanded ? 'chevron-down' : 'chevron-right')),
+      el('span', { class: 'tree-icon' }, codicon(expanded ? 'folder-opened' : 'folder')),
       state.renamingNodeId === node.id ? renameInput(node) : el('span', { class: 'tree-label' }, node.name),
     );
-    setupDrag(row, node);
+    if (state.renamingNodeId !== node.id) {
+      setupDrag(row, node);
+    }
     container.append(row);
     if (expanded) {
       const childrenBox = el('div', { class: 'tree-children' });
@@ -294,60 +438,119 @@ function renderNode(node: TreeNode): HTMLElement {
       el('span', { class: `method-tag method-${node.method}` }, node.method),
       state.renamingNodeId === node.id ? renameInput(node) : el('span', { class: 'tree-label', title: node.url }, node.name || node.url || '(未命名)'),
     );
-    setupDrag(row, node);
+    if (state.renamingNodeId !== node.id) {
+      setupDrag(row, node);
+    }
     container.append(row);
   }
   return container;
+}
+
+/** 從環境選擇器直接新增 sub-environment；名稱留空用預設編號。 */
+function addEnvironment(name: string): void {
+  const collection = state.collection;
+  if (!collection) {
+    return;
+  }
+  const sub: SubEnvironment = {
+    id: genId('env'),
+    name: name || `Environment ${collection.environments.subEnvironments.length + 1}`,
+    color: null,
+    data: {},
+  };
+  collection.environments.subEnvironments.push(sub);
+  state.ui.activeEnvironmentId = sub.id;
+  touch();
+  touchUi();
+  render();
 }
 
 export function renderSidebar(root: HTMLElement): void {
   root.replaceChildren();
   const collection = state.collection;
 
-  // collection 選擇列
-  const collectionSelect = el('select', {
-    onchange: (ev: Event) => {
-      const id = (ev.target as HTMLSelectElement).value;
-      if (id === '__new__') {
-        post({ type: 'runCommand', command: 'newCollection' });
-      } else if (id) {
-        post({ type: 'selectCollection', collectionId: id });
-      }
-    },
+  // collection 選擇列：可搜尋，共用／私人分組，輸入新名稱可直接新增
+  const collectionSelect = combobox({
+    title: '選擇 collection（可輸入文字搜尋）',
+    display: collection ? collection.name : '（無 collection）',
+    placeholder: '搜尋或輸入新名稱…',
+    selectedValue: collection?.id ?? null,
+    groups: [
+      { key: 'shared', label: '共用' },
+      { key: 'private', label: '私人' },
+    ],
+    options: state.collections.map((c) => ({ value: c.id, label: c.name, group: c.source ?? 'shared' })),
+    onSelect: (id) => post({ type: 'selectCollection', collectionId: id }),
+    createActions: [
+      {
+        label: (t) => (t ? `新增到共用：「${t}」` : '新增 collection（共用）…'),
+        run: (t) => post({ type: 'createCollection', name: t, source: 'shared' }),
+      },
+      {
+        label: (t) => (t ? `新增到私人：「${t}」` : '新增 collection（私人）…'),
+        run: (t) => post({ type: 'createCollection', name: t, source: 'private' }),
+      },
+    ],
   });
-  for (const c of state.collections) {
-    collectionSelect.append(
-      el('option', { value: c.id, ...(collection?.id === c.id ? { selected: 'selected' } : {}) }, c.name),
-    );
-  }
-  collectionSelect.append(el('option', { value: '__new__' }, '＋ 新增 collection…'));
-  if (!collection) {
-    collectionSelect.prepend(el('option', { value: '', selected: 'selected' }, '（無 collection）'));
-  }
 
-  // 環境選擇列
-  const envSelect = el('select', {
-    title: '作用中環境',
-    onchange: (ev: Event) => {
-      const value = (ev.target as HTMLSelectElement).value;
-      state.ui.activeEnvironmentId = value === '' ? null : value;
-      touchUi();
-      render();
+  const moreButton = el(
+    'button',
+    {
+      class: 'secondary more-button',
+      title: '匯入、匯出與其他 collection 操作',
+      onclick: (ev: MouseEvent) => {
+        // 阻擋冒泡：避免前一個選單的 window click 監聽器關掉剛開的選單
+        ev.stopPropagation();
+        const rect = (ev.currentTarget as HTMLElement).getBoundingClientRect();
+        const run = (command: Extract<ClientMessage, { type: 'runCommand' }>['command']) => () => post({ type: 'runCommand', command });
+        showCtxMenu(rect.left, rect.bottom + 2, [
+          { label: '匯入 Insomnia…', action: run('importInsomnia') },
+          { label: '匯入 OpenAPI…', action: run('importOpenApi') },
+          { label: '從剪貼簿匯入 curl', action: run('importCurl') },
+          { sep: true, label: '' },
+          { label: '匯出 Insomnia v5 YAML…', action: run('exportInsomniaYaml') },
+          { label: '匯出 Clean OpenAPI…', action: run('exportOpenApi') },
+          { sep: true, label: '' },
+          { label: '選擇共用資料夾…', action: () => post({ type: 'chooseDataFolder', source: 'shared' }) },
+          { label: '選擇私人資料夾…', action: () => post({ type: 'chooseDataFolder', source: 'private' }) },
+          { label: '在 Finder 顯示共用資料夾', action: () => post({ type: 'openDataFolder', source: 'shared' }) },
+          { label: '在 Finder 顯示私人資料夾', action: () => post({ type: 'openDataFolder', source: 'private' }) },
+          { label: '從磁碟重新載入', action: run('reload') },
+        ]);
+      },
     },
-  });
+    '更多…',
+    codicon('chevron-down'),
+  );
+
+  // 環境選擇列：可搜尋，輸入新名稱可直接新增 sub-environment
+  let envSelect: HTMLElement | null = null;
   if (collection) {
-    envSelect.append(
-      el('option', { value: '', ...(state.ui.activeEnvironmentId ? {} : { selected: 'selected' }) }, collection.environments.base.name || 'Base Environment'),
-    );
-    for (const sub of collection.environments.subEnvironments) {
-      envSelect.append(
-        el(
-          'option',
-          { value: sub.id, ...(state.ui.activeEnvironmentId === sub.id ? { selected: 'selected' } : {}) },
-          sub.name,
-        ),
-      );
-    }
+    const base = collection.environments.base;
+    const subs = collection.environments.subEnvironments;
+    const activeSub = subs.find((s) => s.id === state.ui.activeEnvironmentId);
+    envSelect = combobox({
+      title: '作用中環境（可輸入文字搜尋）',
+      display: activeSub ? activeSub.name : base.name || 'Base Environment',
+      displayDot: activeSub ? (activeSub.color ?? null) : null,
+      placeholder: '搜尋或輸入新環境名稱…',
+      selectedValue: state.ui.activeEnvironmentId ?? '',
+      options: [
+        { value: '', label: base.name || 'Base Environment', dotColor: null },
+        ...subs.map((s) => ({ value: s.id, label: s.name, dotColor: s.color ?? null })),
+      ],
+      onSelect: (value) => {
+        state.ui.activeEnvironmentId = value === '' ? null : value;
+        touchUi();
+        render();
+      },
+      createActions: [
+        {
+          label: (t) => (t ? `新增環境：「${t}」` : '新增環境…'),
+          run: addEnvironment,
+        },
+      ],
+    });
   }
 
   const header = el(
@@ -357,16 +560,27 @@ export function renderSidebar(root: HTMLElement): void {
       'div',
       { class: 'row' },
       collectionSelect,
-      el('button', { class: 'icon', title: '新增 Request', onclick: () => newRequest(null) }, '＋'),
+      el('button', { class: 'icon', title: '新增資料夾', onclick: () => requireCollection(() => newFolder(null)) }, codicon('new-folder')),
+      el('button', {
+        class: 'icon',
+        title: '重新命名 collection',
+        onclick: () => requireCollection(() => post({ type: 'renameCollection', collectionId: state.collection!.id })),
+      }, codicon('edit')),
+      el('button', {
+        class: 'icon',
+        title: '刪除 collection',
+        onclick: () => requireCollection(() => post({ type: 'deleteCollection', collectionId: state.collection!.id })),
+      }, codicon('trash')),
     ),
-    collection
-      ? el(
-          'div',
-          { class: 'row' },
-          envSelect,
-          el('button', { class: 'icon', title: '管理環境變數', onclick: () => openEnvEditor('collection') }, '⚙'),
-        )
-      : null,
+    el(
+      'div',
+      { class: 'row' },
+      collection ? envSelect : null,
+      collection
+        ? el('button', { class: 'icon', title: '管理環境變數', onclick: () => openEnvEditor('collection') }, codicon('settings-gear'))
+        : null,
+      moreButton,
+    ),
   );
   root.append(header);
 
@@ -414,7 +628,7 @@ export function renderSidebar(root: HTMLElement): void {
       el(
         'div',
         { class: 'tree-empty' },
-        '空 collection。右鍵或 ＋ 新增 request，或用指令匯入 OpenAPI / curl / Insomnia 格式。',
+        '空 collection。在空白處右鍵新增 request／資料夾（或點擊新增資料夾按鈕），也可用「更多…」匯入 OpenAPI / curl / Insomnia 格式。',
       ),
     );
   } else {

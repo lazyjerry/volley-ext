@@ -120,6 +120,15 @@ function consoleTab(record: ResponseRecord): HTMLElement {
 
 export function renderResponsePane(root: HTMLElement): void {
   root.replaceChildren();
+  if (state.variablePreview) {
+    const preview = el('div', { class: 'var-preview response-var-preview' }, '→ ', state.variablePreview.result);
+    if (state.variablePreview.missing.length > 0) {
+      preview.append(
+        el('span', { class: 'missing' }, ` （未定義：${state.variablePreview.missing.join(', ')}）`),
+      );
+    }
+    root.append(preview);
+  }
   const request = selectedRequest();
   if (!request || !state.collection) {
     root.append(el('div', { class: 'empty-state' }, el('div', {}, '送出 request 後在此顯示回應。')));
