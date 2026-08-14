@@ -46,6 +46,45 @@ suite('insomniaV5', () => {
     assert.deepStrictEqual(imported.environments.base.data, original.environments.base.data);
   });
 
+  test('匯入以陣列順序重編 sortKey（來源 sortKey 重複或遞減不影響順序）', () => {
+    const doc = [
+      'type: collection.insomnia.rest/5.0',
+      'name: Sorted',
+      'meta:',
+      '  id: wrk_00000000000000000000000000000001',
+      'collection:',
+      '  - name: Folder A',
+      '    meta:',
+      '      id: fld_00000000000000000000000000000001',
+      '      sortKey: -100',
+      '    children:',
+      '      - name: first',
+      '        url: https://x/1',
+      '        method: GET',
+      '        meta: { id: req_00000000000000000000000000000001, sortKey: -10 }',
+      '      - name: second',
+      '        url: https://x/2',
+      '        method: POST',
+      '        meta: { id: req_00000000000000000000000000000002, sortKey: -20 }',
+      '      - name: third',
+      '        url: https://x/3',
+      '        method: PUT',
+      '        meta: { id: req_00000000000000000000000000000003, sortKey: -20 }',
+      '  - name: Folder B',
+      '    meta:',
+      '      id: fld_00000000000000000000000000000002',
+      '      sortKey: -200',
+      '    children: []',
+    ].join('\n');
+    const imported = importInsomniaV5(doc);
+    assert.deepStrictEqual(imported.children.map((n) => [n.name, n.sortKey]), [['Folder A', 0], ['Folder B', 1]]);
+    const folder = imported.children[0];
+    assert.strictEqual(folder.kind, 'folder');
+    if (folder.kind === 'folder') {
+      assert.deepStrictEqual(folder.children.map((n) => [n.name, n.sortKey]), [['first', 0], ['second', 1], ['third', 2]]);
+    }
+  });
+
   test('匯出頂層欄位符合 v5 慣例', () => {
     const doc = YAML.parse(exportInsomniaV5(sampleCollection())) as Record<string, unknown>;
     assert.strictEqual(doc.type, 'collection.insomnia.rest/5.0');

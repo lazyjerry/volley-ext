@@ -13,7 +13,7 @@ import type {
   Scripts,
   TreeNode,
 } from '../model/types';
-import { defaultSettings, isFolder } from '../model/types';
+import { defaultSettings, isFolder, normalizeSortKeys } from '../model/types';
 import { genId } from '../model/ids';
 
 export const V5_COLLECTION_TYPE = 'collection.insomnia.rest/5.0';
@@ -254,6 +254,9 @@ export function importInsomniaV5(text: string): Collection {
       children.push(node);
     }
   });
+
+  // v5 的 collection[] 陣列順序即 Insomnia 的顯示順序（meta.sortKey 會重複、方向也不一致）
+  normalizeSortKeys(children);
 
   const rawEnv = (doc.environments ?? {}) as Record<string, unknown>;
   const envMeta = metaOf(rawEnv);
