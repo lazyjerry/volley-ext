@@ -2,7 +2,7 @@
   "name": "volley",
   "displayName": "Volley",
   "description": "VSCode 內的 REST client：資料以標準 OpenAPI 3.1 YAML 保存於可同步資料夾，支援 OpenAPI、curl 與 Insomnia v5/v4 格式匯入匯出",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "publisher": "workjerry",
   "license": "Apache-2.0",
   "engines": {
@@ -146,7 +146,7 @@
     "test:integration": "node ./out/test/runTest.js",
     "test": "npm run build && npm run test:unit && npm run test:integration",
     "check": "npm run lint && npm run test",
-    "package:vsix": "npm run check && vsce package --no-dependencies --allow-missing-repository"
+    "package:vsix": "npm run check && vsce package --no-dependencies"
   },
   "dependencies": {
     "yaml": "^2.5.0"
@@ -167,5 +167,13 @@
     "mocha": "^11.0.0",
     "typescript": "^5.9.0",
     "typescript-eslint": "^8.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lazyjerry/volley-ext.git"
+  },
+  "homepage": "https://github.com/lazyjerry/volley-ext#readme",
+  "bugs": {
+    "url": "https://github.com/lazyjerry/volley-ext/issues"
   }
 }
