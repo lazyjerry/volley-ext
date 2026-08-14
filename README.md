@@ -11,7 +11,7 @@
 - **環境變數**：Base + 多組 sub-environment（可設色）、資料夾層級變數；解析順序為資料夾（近者優先）→ sub-environment → Base。所有欄位（URL、參數、headers、body、auth）都支援 `{{ _.變數 }}` 片段取代，欄位聚焦時即時預覽解析結果、未定義變數以警告色標示。
 - **發送請求**：GET/POST/PUT/PATCH/DELETE/OPTIONS/HEAD；query/path 參數、多種 body（JSON/text/XML/YAML/GraphQL/form-urlencoded/multipart/binary）、Basic/Bearer/API Key 認證、cookie jar 自動收送、重新導向跟隨（302/303 依規範降 GET）、逾時與取消。快捷鍵 `Cmd/Ctrl+Enter` 送出。
 - **回應狀態暫存（history）**：每個 request 保留最近 N 筆回應（預設 20，可調），存於資料夾內、跨裝置同步、重開 VSCode 仍在。
-- **匯入**：OpenAPI 3.x、剪貼簿 curl 指令、Insomnia v5 YAML / v4 JSON 匯出檔。
+- **匯入**：OpenAPI 3.x、剪貼簿 curl 指令、Insomnia v5 YAML / v4 JSON 匯出檔；也可輸入網址直接下載匯入（自動辨識格式）。
 - **匯出**：乾淨 OpenAPI（去除擴充欄位）、request 複製為 curl、Insomnia v5 YAML（通過該格式的官方 JSON Schema 驗證）。
 
 ## 使用方式
@@ -26,7 +26,7 @@
 
 [samples/volley-sample.insomnia.yaml](https://github.com/lazyjerry/volley-ext/blob/main/samples/volley-sample.insomnia.yaml) 是可直接匯入的範例（Insomnia v5 YAML，34 個 request，全部使用免金鑰的公開 API）。
 
-匯入方式：側欄「更多…」→「匯入 Insomnia…」選取檔案，或直接下載遠端檔案測試：
+匯入方式：側欄「更多…」→「匯入 Insomnia…」選取檔案，或用「從網址匯入…」貼上這個網址直接下載匯入：
 
 ```
 https://raw.githubusercontent.com/lazyjerry/volley-ext/main/samples/volley-sample.insomnia.yaml
@@ -57,6 +57,7 @@ https://raw.githubusercontent.com/lazyjerry/volley-ext/main/samples/volley-sampl
 | `Volley: Import OpenAPI 3.x`                    | 匯入 OpenAPI 文件        |
 | `Volley: Import curl from Clipboard`            | 從剪貼簿匯入 curl 指令   |
 | `Volley: Import Insomnia (v5 YAML / v4 JSON)`   | 匯入 Insomnia 格式匯出檔 |
+| `Volley: Import from URL`                       | 從網址下載並匯入（自動辨識格式） |
 | `Volley: Export Clean OpenAPI (strip x-volley)` | 匯出標準 OpenAPI         |
 | `Volley: Export Collection as Insomnia v5 YAML` | 匯出成 Insomnia 格式     |
 | `Volley: Choose Data Folder`                    | 以資料夾選擇器設定共用／私人資料夾 |

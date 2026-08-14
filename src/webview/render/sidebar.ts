@@ -507,6 +507,7 @@ export function renderSidebar(root: HTMLElement): void {
           { label: '匯入 Insomnia…', action: run('importInsomnia') },
           { label: '匯入 OpenAPI…', action: run('importOpenApi') },
           { label: '從剪貼簿匯入 curl', action: run('importCurl') },
+          { label: '從網址匯入…', action: run('importFromUrl') },
           { sep: true, label: '' },
           { label: '匯出 Insomnia v5 YAML…', action: run('exportInsomniaYaml') },
           { label: '匯出 Clean OpenAPI…', action: run('exportOpenApi') },

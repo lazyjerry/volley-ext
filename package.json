@@ -2,7 +2,7 @@
   "name": "volley",
   "displayName": "Volley",
   "description": "VSCode 內的 REST client：資料以標準 OpenAPI 3.1 YAML 保存於可同步資料夾，支援 OpenAPI、curl 與 Insomnia v5/v4 格式匯入匯出",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "publisher": "workjerry",
   "license": "Apache-2.0",
   "engines": {
@@ -65,6 +65,10 @@
       {
         "command": "volley.importCurl",
         "title": "Volley: Import curl from Clipboard"
+      },
+      {
+        "command": "volley.importFromUrl",
+        "title": "Volley: Import from URL"
       },
       {
         "command": "volley.exportInsomniaYaml",

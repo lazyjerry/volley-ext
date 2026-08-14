@@ -8,12 +8,13 @@ import { parseCollection, serializeCleanOpenApi } from './core/formats/openapiSt
 import { exportInsomniaV5, importInsomniaV5, isInsomniaV5 } from './core/formats/insomniaV5';
 import { importInsomniaV4, isInsomniaV4 } from './core/formats/insomniaV4';
 import { importOpenApi } from './core/formats/openapiImport';
+import { downloadText, parseImportedText } from './core/formats/urlImport';
 import * as YAML from 'yaml';
 import type { CollectionSource } from './core/model/types';
 import { CollectionStore } from './storage/collectionStore';
 import { StateStore } from './storage/stateStore';
 import { DualCollectionStore, DualStateStore } from './storage/dualStore';
-import { expandHome, findConflictedCopies, resolveDataFolder } from './storage/dataFolder';
+import { countCollectionFiles, expandHome, findConflictedCopies, resolveDataFolder } from './storage/dataFolder';
 import type { DataFolderLayout } from './storage/dataFolder';
 import { ClientViewProvider } from './views/clientViewProvider';
 
@@ -185,6 +186,17 @@ export function activate(context: vscode.ExtensionContext): void {
       );
       return;
     }
+    const existing = countCollectionFiles(picked);
+    if (existing > 0) {
+      const confirm = await vscode.window.showWarningMessage(
+        `該資料夾已包含 ${existing} 個 collection，設為${SOURCE_LABELS[source]}資料夾後將一併載入。要繼續嗎？`,
+        { modal: true },
+        '繼續',
+      );
+      if (confirm !== '繼續') {
+        return;
+      }
+    }
     const key = source === 'shared' ? 'dataFolder' : 'privateDataFolder';
     // 寫入設定後由 onDidChangeConfiguration 重建 stores 並刷新畫面
     await vscode.workspace
@@ -261,6 +273,29 @@ export function activate(context: vscode.ExtensionContext): void {
       const info = doc?.info as Record<string, unknown> | undefined;
       const collection = info?.['x-volley'] ? parseCollection(text) : importOpenApi(text);
       importCollection(collection);
+    } catch (err) {
+      void vscode.window.showErrorMessage(
+        `匯入失敗：${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  });
+
+  register('volley.importFromUrl', async () => {
+    const url = await vscode.window.showInputBox({
+      title: '從網址匯入',
+      prompt: '輸入 Insomnia v5/v4、OpenAPI 3.x 或 Volley 匯出檔的網址',
+      placeHolder: 'https://example.com/collection.yaml',
+      ignoreFocusOut: true,
+    });
+    if (!url?.trim()) {
+      return;
+    }
+    try {
+      const text = await vscode.window.withProgress(
+        { location: vscode.ProgressLocation.Notification, title: 'Volley：正在下載匯入檔…' },
+        () => downloadText(url.trim()),
+      );
+      importCollection(parseImportedText(text));
     } catch (err) {
       void vscode.window.showErrorMessage(
         `匯入失敗：${err instanceof Error ? err.message : String(err)}`,
