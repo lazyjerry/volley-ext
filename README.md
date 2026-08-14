@@ -32,6 +32,8 @@
 https://raw.githubusercontent.com/lazyjerry/volley-ext/main/samples/volley-sample.insomnia.yaml
 ```
 
+> 手動下載檔案請用上面的 raw 網址（`wget https://raw.githubusercontent.com/...`）。對 GitHub 網頁網址（含 `/blob/`）執行 wget 或另存新檔，會下載到 HTML 網頁而非 YAML，匯入時會報格式錯誤。
+
 涵蓋情境：GET/POST/PUT/PATCH/DELETE/HEAD、查詢參數（含停用）、JSON / form-urlencoded / multipart / 純文字 / XML / GraphQL body、Basic / Bearer / API Key 認證、轉址（跟隨與不跟隨）、延遲、gzip、cookie 存取、環境變數（含巢狀物件與 sub-environment 切換）、資料夾層級變數與 headers 繼承、巢狀資料夾、`renderRequestBody` 與 `cookies.send` 等 request 設定。
 
 使用的遠端服務（皆為公開測試 API）：
