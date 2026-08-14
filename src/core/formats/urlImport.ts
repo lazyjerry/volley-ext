@@ -7,6 +7,19 @@ import { importInsomniaV5, isInsomniaV5 } from './insomniaV5';
 import { importOpenApi } from './openapiImport';
 import { isNativeDocument, parseCollection } from './openapiStore';
 
+// GitHub 網頁網址（/blob/）回傳的是 HTML 頁面而非檔案內容，自動改寫成 raw 檔案網址
+export function rewriteGitHubBlobUrl(parsed: URL): URL {
+  if (parsed.hostname !== 'github.com' && parsed.hostname !== 'www.github.com') {
+    return parsed;
+  }
+  const segments = parsed.pathname.split('/').filter(Boolean);
+  if (segments.length < 5 || segments[2] !== 'blob') {
+    return parsed;
+  }
+  const [owner, repo, , ...refAndPath] = segments;
+  return new URL(`https://raw.githubusercontent.com/${owner}/${repo}/${refAndPath.join('/')}`);
+}
+
 export async function downloadText(url: string, timeoutMs = 30000): Promise<string> {
   let parsed: URL;
   try {
@@ -17,6 +30,7 @@ export async function downloadText(url: string, timeoutMs = 30000): Promise<stri
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
     throw new Error('僅支援 http / https 網址');
   }
+  parsed = rewriteGitHubBlobUrl(parsed);
   let response: Response;
   try {
     response = await fetch(parsed, { signal: AbortSignal.timeout(timeoutMs) });

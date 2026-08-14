@@ -3,7 +3,11 @@ import * as fs from 'node:fs';
 import * as http from 'node:http';
 import * as path from 'node:path';
 import type { AddressInfo } from 'node:net';
-import { downloadText, parseImportedText } from '../../src/core/formats/urlImport';
+import {
+  downloadText,
+  parseImportedText,
+  rewriteGitHubBlobUrl,
+} from '../../src/core/formats/urlImport';
 import { serializeCollection } from '../../src/core/formats/openapiStore';
 import { sampleCollection } from './helpers';
 
@@ -63,6 +67,40 @@ suite('urlImport / parseImportedText', () => {
 
   test('不是有效 YAML / JSON → 丟出錯誤', () => {
     assert.throws(() => parseImportedText('{invalid: ['), /資料格式不符/);
+  });
+});
+
+suite('urlImport / rewriteGitHubBlobUrl', () => {
+  test('github.com blob 網址 → raw 網址', () => {
+    assert.strictEqual(
+      rewriteGitHubBlobUrl(
+        new URL('https://github.com/lazyjerry/volley-ext/blob/main/samples/volley-sample.insomnia.yaml'),
+      ).href,
+      'https://raw.githubusercontent.com/lazyjerry/volley-ext/main/samples/volley-sample.insomnia.yaml',
+    );
+  });
+
+  test('www.github.com 與多層路徑、分支含斜線以外字元皆可改寫', () => {
+    assert.strictEqual(
+      rewriteGitHubBlobUrl(new URL('https://www.github.com/o/r/blob/v1.2.3/a/b/c.json')).href,
+      'https://raw.githubusercontent.com/o/r/v1.2.3/a/b/c.json',
+    );
+  });
+
+  test('非 github.com 網址不改寫', () => {
+    const url = new URL('https://example.com/o/r/blob/main/a.yaml');
+    assert.strictEqual(rewriteGitHubBlobUrl(url), url);
+  });
+
+  test('github.com 非 blob 路徑不改寫（releases、raw、過短路徑）', () => {
+    for (const href of [
+      'https://github.com/o/r/releases/download/v1/a.yaml',
+      'https://github.com/o/r/raw/main/a.yaml',
+      'https://github.com/o/r/blob/main',
+    ]) {
+      const url = new URL(href);
+      assert.strictEqual(rewriteGitHubBlobUrl(url), url);
+    }
   });
 });
 
