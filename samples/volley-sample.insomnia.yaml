@@ -1,0 +1,946 @@
+type: collection.insomnia.rest/5.0
+schema_version: "5.1"
+name: Volley 範例 Collection
+meta:
+  id: wrk_33117b27e05da5d3503e56b12f7bcf9d
+  created: 1786712930632
+  modified: 1786712930632
+  description: 涵蓋方法、認證、body 形式、轉址、cookie、環境變數與資料夾繼承的公開 API 範例。
+collection:
+  - url: "{{ _.httpbin_url }}/uuid"
+    name: Ping（根層級 request）
+    meta:
+      id: req_5c0ef45ed8b59672d3f73ecbca93cc16
+      created: 1786712930632
+      modified: 1786712930632
+      isPrivate: false
+      description: request 也可以放在根層級，不一定要在資料夾內。
+      sortKey: 0
+    method: GET
+    parameters: []
+    headers: []
+    authentication: {}
+    settings:
+      renderRequestBody: true
+      encodeUrl: true
+      followRedirects: global
+      cookies:
+        send: true
+        store: true
+      rebuildPath: true
+  - name: 01 基本方法
+    meta:
+      id: fld_0a7c38f58bd2b270cd3c39b08c2d2a9c
+      created: 1786712930632
+      modified: 1786712930632
+      sortKey: 1
+      description: 這個資料夾的 request 都用 {{ _.base_url }}，切換 sub-environment 可整批改打 Postman Echo。
+    children:
+      - url: "{{ _.base_url }}/get"
+        name: GET + 查詢參數
+        meta:
+          id: req_316827a58499c8ac421dd18e0ab2d1c0
+          created: 1786712930632
+          modified: 1786712930632
+          isPrivate: false
+          description: Params 分頁維護查詢參數；停用的參數不會送出。
+          sortKey: 0
+        method: GET
+        parameters:
+          - name: q
+            value: volley
+            description: 關鍵字
+          - name: page
+            value: "1"
+          - name: debug
+            value: "true"
+            disabled: true
+            description: 停用中，不會送出
+        headers: []
+        authentication: {}
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.base_url }}/post"
+        name: POST JSON（含物件變數）
+        meta:
+          id: req_969f9a6fda3c9f6acf55efacf77c265e
+          created: 1786712930632
+          modified: 1786712930632
+          isPrivate: false
+          description: "{{ _.profile }} 是物件變數，插值時會序列化為 JSON。"
+          sortKey: 1
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "title": "volley demo",
+              "profile": {{ _.profile }}
+            }
+        parameters: []
+        headers: []
+        authentication: {}
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.base_url }}/put"
+        name: PUT
+        meta:
+          id: req_64dcf049cf26a050ac51cdd3ee61f824
+          created: 1786712930632
+          modified: 1786712930632
+          isPrivate: false
+          description: ""
+          sortKey: 2
+        method: PUT
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "id": 1,
+              "title": "updated"
+            }
+        parameters: []
+        headers: []
+        authentication: {}
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.base_url }}/patch"
+        name: PATCH
+        meta:
+          id: req_c4f5ebdca67485732ecf179ce9757a8a
+          created: 1786712930632
+          modified: 1786712930632
+          isPrivate: false
+          description: ""
+          sortKey: 3
+        method: PATCH
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "title": "patched"
+            }
+        parameters: []
+        headers: []
+        authentication: {}
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.base_url }}/delete"
+        name: DELETE
+        meta:
+          id: req_1b644f3a153846d2777ccbbb1773a2e6
+          created: 1786712930632
+          modified: 1786712930632
+          isPrivate: false
+          description: ""
+          sortKey: 4
+        method: DELETE
+        parameters: []
+        headers: []
+        authentication: {}
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.base_url }}/status/200"
+        name: HEAD（只看 headers）
+        meta:
+          id: req_650383395cc62a49e40e27c07304a937
+          created: 1786712930632
+          modified: 1786712930632
+          isPrivate: false
+          description: ""
+          sortKey: 5
+        method: HEAD
+        parameters: []
+        headers: []
+        authentication: {}
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+  - name: 02 認證
+    meta:
+      id: fld_7ccae54148ab6e37ed0618ccb0c8f9b7
+      created: 1786712930632
+      modified: 1786712930632
+      sortKey: 2
+      description: ""
+    children:
+      - url: "{{ _.httpbin_url }}/basic-auth/{{ _.cred.user }}/{{ _.cred.pass }}"
+        name: Basic Auth
+        meta:
+          id: req_48262121b112748a4addb232a7598ec3
+          created: 1786712930632
+          modified: 1786712930632
+          isPrivate: false
+          description: 帳密取自環境變數的巢狀物件 cred。
+          sortKey: 0
+        method: GET
+        parameters: []
+        headers: []
+        authentication:
+          type: basic
+          username: "{{ _.cred.user }}"
+          password: "{{ _.cred.pass }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.httpbin_url }}/bearer"
+        name: Bearer Token
+        meta:
+          id: req_b33917692d3a5a2ef840e6862c3c5511
+          created: 1786712930632
+          modified: 1786712930632
+          isPrivate: false
+          description: ""
+          sortKey: 1
+        method: GET
+        parameters: []
+        headers: []
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.httpbin_url }}/headers"
+        name: API Key（自訂 header）
+        meta:
+          id: req_21b026dd61d8004c3ff1950c4ae7630a
+          created: 1786712930632
+          modified: 1786712930632
+          isPrivate: false
+          description: 回應會 echo 收到的 X-Api-Key。
+          sortKey: 2
+        method: GET
+        parameters: []
+        headers: []
+        authentication:
+          type: apikey
+          key: X-Api-Key
+          value: "{{ _.token }}"
+          addTo: header
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.httpbin_url }}/headers"
+        name: 認證已停用
+        meta:
+          id: req_4410a60797aa84d80ac3d2d4e98e6beb
+          created: 1786712930632
+          modified: 1786712930632
+          isPrivate: false
+          description: authentication.disabled = true，不會附加 Authorization。
+          sortKey: 3
+        method: GET
+        parameters: []
+        headers: []
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+          disabled: true
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+  - name: 03 Body 形式
+    meta:
+      id: fld_0e712962b58e69797c1f6290fd7890bd
+      created: 1786712930632
+      modified: 1786712930632
+      sortKey: 3
+      description: ""
+    children:
+      - url: "{{ _.base_url }}/post"
+        name: form-urlencoded
+        meta:
+          id: req_d081b704d18eba8f6e05fa14b394dc98
+          created: 1786712930632
+          modified: 1786712930632
+          isPrivate: false
+          description: ""
+          sortKey: 0
+        method: POST
+        body:
+          mimeType: application/x-www-form-urlencoded
+          params:
+            - name: name
+              value: Volley
+            - name: lang
+              value: zh-TW
+            - name: skip
+              value: me
+              disabled: true
+        parameters: []
+        headers: []
+        authentication: {}
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.base_url }}/post"
+        name: multipart/form-data
+        meta:
+          id: req_283e87786f825e9777a83c71c46f3982
+          created: 1786712930632
+          modified: 1786712930632
+          isPrivate: false
+          description: ""
+          sortKey: 1
+        method: POST
+        body:
+          mimeType: multipart/form-data
+          params:
+            - name: field1
+              value: hello
+              type: text
+            - name: token
+              value: "{{ _.token }}"
+              type: text
+        parameters: []
+        headers: []
+        authentication: {}
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.base_url }}/post"
+        name: 純文字 body
+        meta:
+          id: req_32c51f30873b588308ca521eed06e0a0
+          created: 1786712930632
+          modified: 1786712930632
+          isPrivate: false
+          description: ""
+          sortKey: 2
+        method: POST
+        body:
+          mimeType: text/plain
+          text: hello from volley
+        parameters: []
+        headers: []
+        authentication: {}
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.base_url }}/post"
+        name: XML body
+        meta:
+          id: req_e82e8accc96ebb2500cfd74abe48e3ff
+          created: 1786712930632
+          modified: 1786712930632
+          isPrivate: false
+          description: ""
+          sortKey: 3
+        method: POST
+        body:
+          mimeType: application/xml
+          text: <note><to>Volley</to><body>示範 XML</body></note>
+        parameters: []
+        headers:
+          - name: Content-Type
+            value: application/xml
+        authentication: {}
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: https://countries.trevorblades.com/
+        name: GraphQL（Countries API）
+        meta:
+          id: req_c39bb4664774057e964567020d21e965
+          created: 1786712930632
+          modified: 1786712930632
+          isPrivate: false
+          description: 公開 GraphQL API，查台灣的國名、首都與 emoji。
+          sortKey: 4
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "query": "{ country(code: \"TW\") { name capital emoji currency } }"
+            }
+        parameters: []
+        headers: []
+        authentication: {}
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.base_url }}/post"
+        name: 不插值 body（renderRequestBody=false）
+        meta:
+          id: req_25085feac2cedd43a62df3dd59105dd2
+          created: 1786712930632
+          modified: 1786712930632
+          isPrivate: false
+          description: body 中的 {{ raw_text }} 會原樣送出，不做變數插值。
+          sortKey: 5
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "template": "{{ raw_text }}"
+            }
+        parameters: []
+        headers: []
+        authentication: {}
+        settings:
+          renderRequestBody: false
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+  - name: 04 回應與轉址
+    meta:
+      id: fld_2aefb273910fd2649da9096651805ce6
+      created: 1786712930632
+      modified: 1786712930632
+      sortKey: 4
+      description: ""
+    children:
+      - url: "{{ _.httpbin_url }}/redirect/3"
+        name: 跟隨轉址（3 次）
+        meta:
+          id: req_48b99236bf68c4739ee95906b3f99315
+          created: 1786712930632
+          modified: 1786712930632
+          isPrivate: false
+          description: 回應面板會列出 redirect chain。
+          sortKey: 0
+        method: GET
+        parameters: []
+        headers: []
+        authentication: {}
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.httpbin_url }}/redirect-to"
+        name: 不跟隨轉址
+        meta:
+          id: req_042a78e9b882980e155afa8f1ab23b3c
+          created: 1786712930632
+          modified: 1786712930632
+          isPrivate: false
+          description: followRedirects = off，會停在 302。
+          sortKey: 1
+        method: GET
+        parameters:
+          - name: url
+            value: https://example.com/
+        headers: []
+        authentication: {}
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: off
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.httpbin_url }}/delay/2"
+        name: 延遲 2 秒
+        meta:
+          id: req_243926cbdfe4a061f290e80ce150ef88
+          created: 1786712930632
+          modified: 1786712930632
+          isPrivate: false
+          description: ""
+          sortKey: 2
+        method: GET
+        parameters: []
+        headers: []
+        authentication: {}
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.httpbin_url }}/json"
+        name: JSON 回應
+        meta:
+          id: req_5d5e613313fcbec8be91031fed4a8aa0
+          created: 1786712930632
+          modified: 1786712930632
+          isPrivate: false
+          description: ""
+          sortKey: 3
+        method: GET
+        parameters: []
+        headers: []
+        authentication: {}
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.httpbin_url }}/xml"
+        name: XML 回應
+        meta:
+          id: req_6873a7200b7d0074d1096a39304e24b0
+          created: 1786712930632
+          modified: 1786712930632
+          isPrivate: false
+          description: ""
+          sortKey: 4
+        method: GET
+        parameters: []
+        headers: []
+        authentication: {}
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.httpbin_url }}/html"
+        name: HTML 回應
+        meta:
+          id: req_4b857220a585404fa6ed400fa92b3953
+          created: 1786712930632
+          modified: 1786712930632
+          isPrivate: false
+          description: ""
+          sortKey: 5
+        method: GET
+        parameters: []
+        headers: []
+        authentication: {}
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.httpbin_url }}/status/404"
+        name: "404"
+        meta:
+          id: req_07ace6a9a6325b7606e44d8ffa2b2a76
+          created: 1786712930632
+          modified: 1786712930632
+          isPrivate: false
+          description: ""
+          sortKey: 6
+        method: GET
+        parameters: []
+        headers: []
+        authentication: {}
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.httpbin_url }}/gzip"
+        name: gzip 壓縮回應
+        meta:
+          id: req_714db3298d47afcf80079269b8339df9
+          created: 1786712930632
+          modified: 1786712930632
+          isPrivate: false
+          description: ""
+          sortKey: 7
+        method: GET
+        parameters: []
+        headers: []
+        authentication: {}
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+  - name: 05 Cookie
+    meta:
+      id: fld_4d1c81c3747199c808c2c4a3c3f8911e
+      created: 1786712930632
+      modified: 1786712930632
+      sortKey: 5
+      description: ""
+    children:
+      - url: "{{ _.httpbin_url }}/cookies/set"
+        name: 設定 cookie
+        meta:
+          id: req_fa0dec3c484c82dfc7d95029d085e650
+          created: 1786712930632
+          modified: 1786712930632
+          isPrivate: false
+          description: 回應的 Set-Cookie 會存進 cookie jar。
+          sortKey: 0
+        method: GET
+        parameters:
+          - name: demo
+            value: volley
+          - name: flavor
+            value: lime
+        headers: []
+        authentication: {}
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.httpbin_url }}/cookies"
+        name: 讀取 cookie
+        meta:
+          id: req_cf9cefce651583ad034d24cedcc7a838
+          created: 1786712930632
+          modified: 1786712930632
+          isPrivate: false
+          description: 先執行「設定 cookie」，這裡會 echo jar 內送出的 cookie。
+          sortKey: 1
+        method: GET
+        parameters: []
+        headers: []
+        authentication: {}
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.httpbin_url }}/cookies"
+        name: 不送 cookie
+        meta:
+          id: req_97236a898996dcffe2b654ee44b091f5
+          created: 1786712930632
+          modified: 1786712930632
+          isPrivate: false
+          description: settings.cookies.send = false，jar 有 cookie 也不送。
+          sortKey: 2
+        method: GET
+        parameters: []
+        headers: []
+        authentication: {}
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: false
+            store: true
+          rebuildPath: true
+  - name: 06 真實 API 與資料夾繼承
+    meta:
+      id: fld_212916a9c14373e44b200c859dbdc39f
+      created: 1786712930632
+      modified: 1786712930632
+      sortKey: 6
+      description: 示範資料夾層級的變數（resource）與 headers 繼承，以及巢狀資料夾。
+    children:
+      - url: "{{ _.jsonph_url }}/{{ _.resource }}"
+        name: JSONPlaceholder 清單
+        meta:
+          id: req_4f30ce5de26f57699d9788e14b43948e
+          created: 1786712930632
+          modified: 1786712930632
+          isPrivate: false
+          description: resource 來自資料夾變數；X-Demo-Folder header 由資料夾層級附加。
+          sortKey: 0
+        method: GET
+        parameters:
+          - name: _limit
+            value: "5"
+        headers: []
+        authentication: {}
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.jsonph_url }}/{{ _.resource }}/1"
+        name: JSONPlaceholder 單筆
+        meta:
+          id: req_9eef1a98d9b54a3ffd964e2587ef02cb
+          created: 1786712930632
+          modified: 1786712930632
+          isPrivate: false
+          description: ""
+          sortKey: 1
+        method: GET
+        parameters: []
+        headers: []
+        authentication: {}
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.jsonph_url }}/{{ _.resource }}"
+        name: JSONPlaceholder 建立
+        meta:
+          id: req_c6f24e65485c23f13982861e92eb75f0
+          created: 1786712930632
+          modified: 1786712930632
+          isPrivate: false
+          description: ""
+          sortKey: 2
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "title": "volley",
+              "body": "從範例 collection 送出",
+              "userId": 1
+            }
+        parameters: []
+        headers: []
+        authentication: {}
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - name: 巢狀子資料夾：其他公開 API
+        meta:
+          id: fld_823f8f887fde8c05def0a1d59e930cc2
+          created: 1786712930632
+          modified: 1786712930632
+          sortKey: 3
+          description: ""
+        children:
+          - url: https://api.zippopotam.us/us/90210
+            name: Zippopotam：郵遞區號查詢
+            meta:
+              id: req_ecb60325bd9225236abac3a424e5b718
+              created: 1786712930632
+              modified: 1786712930632
+              isPrivate: false
+              description: 公開郵遞區號 API，免金鑰。
+              sortKey: 0
+            method: GET
+            parameters: []
+            headers: []
+            authentication: {}
+            settings:
+              renderRequestBody: true
+              encodeUrl: true
+              followRedirects: global
+              cookies:
+                send: true
+                store: true
+              rebuildPath: true
+          - url: https://api.open-meteo.com/v1/forecast
+            name: Open-Meteo：台北天氣
+            meta:
+              id: req_a6825eb3390009e98ad957d37bcc2c22
+              created: 1786712930632
+              modified: 1786712930632
+              isPrivate: false
+              description: ""
+              sortKey: 1
+            method: GET
+            parameters:
+              - name: latitude
+                value: "25.03"
+              - name: longitude
+                value: "121.56"
+              - name: current_weather
+                value: "true"
+            headers: []
+            authentication: {}
+            settings:
+              renderRequestBody: true
+              encodeUrl: true
+              followRedirects: global
+              cookies:
+                send: true
+                store: true
+              rebuildPath: true
+          - url: https://api.github.com/repos/microsoft/vscode
+            name: GitHub：vscode repo
+            meta:
+              id: req_2fd7887a469a49a98e8126892bc5f827
+              created: 1786712930632
+              modified: 1786712930632
+              isPrivate: false
+              description: GitHub API 要求 User-Agent header（未登入額度 60 次/小時）。
+              sortKey: 2
+            method: GET
+            parameters: []
+            headers:
+              - name: User-Agent
+                value: volley-sample
+              - name: Accept
+                value: application/vnd.github+json
+            authentication: {}
+            settings:
+              renderRequestBody: true
+              encodeUrl: true
+              followRedirects: global
+              cookies:
+                send: true
+                store: true
+              rebuildPath: true
+    environment:
+      resource: posts
+    headers:
+      - name: X-Demo-Folder
+        value: volley
+cookieJar:
+  name: Default Jar
+  meta:
+    id: jar_1c18228d24842506714be1ccb2d30eb5
+    created: 1786712930632
+    modified: 1786712930632
+  cookies:
+    - id: jar_9e21867fc6f0789b2681be2122a7eb7d
+      key: seeded
+      value: from-import
+      domain: httpbingo.org
+      path: /
+      secure: false
+      httpOnly: false
+      hostOnly: false
+      expires: null
+environments:
+  name: Base Environment
+  meta:
+    id: env_a5a133e4f6935bb4ec66fe1a1f9738f8
+    created: 1786712930632
+    modified: 1786712930632
+    isPrivate: false
+  color: null
+  data:
+    base_url: https://httpbingo.org
+    httpbin_url: https://httpbingo.org
+    jsonph_url: https://jsonplaceholder.typicode.com
+    token: volley-demo-token
+    cred:
+      user: volley
+      pass: s3cret
+    profile:
+      name: Volley
+      tags:
+        - rest
+        - demo
+  subEnvironments:
+    - name: httpbingo.org（同 Base）
+      meta:
+        id: env_08f4d7a6185c3534d4ca6db3faf0bf34
+        created: 1786712930632
+        modified: 1786712930632
+        isPrivate: false
+      color: "#4f9cf9"
+      data:
+        base_url: https://httpbingo.org
+    - name: Postman Echo
+      meta:
+        id: env_9afb2a20419c8fed067622dcd03ae47a
+        created: 1786712930632
+        modified: 1786712930632
+        isPrivate: false
+      color: "#39b54a"
+      data:
+        base_url: https://postman-echo.com
