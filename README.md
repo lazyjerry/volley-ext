@@ -5,7 +5,9 @@
 ## 功能
 
 - **三欄式介面**：資料夾樹｜Request 編輯｜Response 檢視。放在底部 Panel 時為三欄並列（可拖曳調整寬度）；拖到左右側邊欄等窄版位置時自動改為 Collection / Request / Response 分頁切換。
-- **資料夾管理**：巢狀資料夾、拖曳排序與搬移、右鍵選單（新增/改名/複製/刪除）。
+- **共用／私人雙資料夾**：`volley.dataFolder`（共用，建議指向雲端同步空間）與 `volley.privateDataFolder`（私人，適合放不同步的個人 collection）完全隔離、各自存檔；兩邊的 collections 同列在選擇器中，以「共用」「私人」分組顯示，各自可新增。
+- **可搜尋選擇器**：collection 與環境選擇器均可輸入文字即時過濾；輸入的名稱不存在時，底部出現「＋ 新增」選項，點擊即以該名稱建立 collection（選共用或私人）或環境。
+- **資料夾管理**：巢狀資料夾、拖曳排序與搬移（顯示插入位置指示線，停在資料夾上會自動展開）、工具列 🗀 新增資料夾、右鍵新增 request／改名/複製/刪除；刪除非空資料夾時可選擇連同內容刪除，或只刪資料夾把內容移到上一層。
 - **環境變數**：Base + 多組 sub-environment（可設色）、資料夾層級變數；解析順序為資料夾（近者優先）→ sub-environment → Base。所有欄位（URL、參數、headers、body、auth）都支援 `{{ _.變數 }}` 片段取代，欄位聚焦時即時預覽解析結果、未定義變數以警告色標示。
 - **發送請求**：GET/POST/PUT/PATCH/DELETE/OPTIONS/HEAD；query/path 參數、多種 body（JSON/text/XML/YAML/GraphQL/form-urlencoded/multipart/binary）、Basic/Bearer/API Key 認證、cookie jar 自動收送、重新導向跟隨（302/303 依規範降 GET）、逾時與取消。快捷鍵 `Cmd/Ctrl+Enter` 送出。
 - **回應狀態暫存（history）**：每個 request 保留最近 N 筆回應（預設 20，可調），存於資料夾內、跨裝置同步、重開 VSCode 仍在。
@@ -14,11 +16,37 @@
 
 ## 使用方式
 
-1. 安裝後開啟底部 Panel 的「REST Client」（或指令 `Volley: Open`）。
-2. **設定同步資料夾**（建議）：在設定中將 `volley.dataFolder` 指向雲端同步資料夾，例如 `~/Dropbox/volley-data`。未設定時資料存於延伸模組本機空間，不跨裝置。
+1. 安裝後開啟底部 Panel 的「Volleeeey」（或指令 `Volley: Open`）。
+2. **設定同步資料夾**（建議）：在設定中將 `volley.dataFolder` 指向雲端同步資料夾，例如 `~/Dropbox/volley-data`。未設定時資料存於延伸模組本機空間，不跨裝置。另可設定 `volley.privateDataFolder` 作為第二個（不同步的）私人資料夾，兩者的 collections 在選擇器中分組並存。
 3. 建立 collection → 新增 request → 填 URL（可用 `{{ _.base_url }}/path`）→ Send。
-4. 環境變數：側欄環境下拉旁的 ⚙ 開啟管理畫面；資料夾右鍵可編輯資料夾層級變數。
+4. 環境變數：側欄環境選擇器可直接搜尋與新增環境；旁邊的 ⚙ 開啟管理畫面（有變動時關閉鈕顯示儲存圖示、無變動顯示 ✕）；資料夾右鍵可編輯資料夾層級變數。
 5. 匯入匯出：指令面板搜尋「Volley:」。
+
+### 範例 Collection
+
+[samples/volley-sample.insomnia.yaml](https://github.com/lazyjerry/volley-ext/blob/main/samples/volley-sample.insomnia.yaml) 是可直接匯入的範例（Insomnia v5 YAML，34 個 request，全部使用免金鑰的公開 API）。
+
+匯入方式：側欄「更多…」→「匯入 Insomnia…」選取檔案，或直接下載遠端檔案測試：
+
+```
+https://raw.githubusercontent.com/lazyjerry/volley-ext/main/samples/volley-sample.insomnia.yaml
+```
+
+涵蓋情境：GET/POST/PUT/PATCH/DELETE/HEAD、查詢參數（含停用）、JSON / form-urlencoded / multipart / 純文字 / XML / GraphQL body、Basic / Bearer / API Key 認證、轉址（跟隨與不跟隨）、延遲、gzip、cookie 存取、環境變數（含巢狀物件與 sub-environment 切換）、資料夾層級變數與 headers 繼承、巢狀資料夾、`renderRequestBody` 與 `cookies.send` 等 request 設定。
+
+使用的遠端服務（皆為公開測試 API）：
+
+| 服務 | 用途 |
+| ---- | ---- |
+| [httpbingo.org](https://httpbingo.org) | HTTP 測試（方法、認證、轉址、cookie、延遲、gzip） |
+| [postman-echo.com](https://postman-echo.com) | sub-environment 切換示範（與 base_url 互換） |
+| [jsonplaceholder.typicode.com](https://jsonplaceholder.typicode.com) | REST CRUD 假資料 |
+| [countries.trevorblades.com](https://countries.trevorblades.com) | GraphQL 查詢 |
+| [open-meteo.com](https://open-meteo.com) | 天氣資料 |
+| [api.zippopotam.us](https://api.zippopotam.us) | 郵遞區號查詢 |
+| [api.github.com](https://docs.github.com/rest) | 需自訂 header 的真實 API（未登入額度 60 次/小時） |
+
+範例由 `scripts/generate-sample-collection.js` 產生（會驗證官方 schema 與 round-trip 匯入），修改後重新執行即可更新。
 
 ### 指令一覽
 
@@ -31,14 +59,16 @@
 | `Volley: Import Insomnia (v5 YAML / v4 JSON)`   | 匯入 Insomnia 格式匯出檔 |
 | `Volley: Export Clean OpenAPI (strip x-volley)` | 匯出標準 OpenAPI         |
 | `Volley: Export Collection as Insomnia v5 YAML` | 匯出成 Insomnia 格式     |
-| `Volley: Reveal Data Folder`                    | 開啟資料夾               |
+| `Volley: Choose Data Folder`                    | 以資料夾選擇器設定共用／私人資料夾 |
+| `Volley: Reveal Data Folder`                    | 開啟資料夾（詢問共用／私人） |
 | `Volley: Reload from Disk`                      | 從磁碟重新載入           |
 
 ### 設定項
 
 | 設定                          | 預設   | 說明                                              |
 | ----------------------------- | ------ | ------------------------------------------------- |
-| `volley.dataFolder`           | （空） | 資料保存資料夾，支援 `~/`；空值用本機延伸模組空間 |
+| `volley.dataFolder`           | （空） | 共用資料夾，支援 `~/`；空值用本機延伸模組空間     |
+| `volley.privateDataFolder`    | （空） | 私人資料夾（與共用完全隔離）；空值用延伸模組空間的 private 子資料夾 |
 | `volley.requestTimeoutMs`     | 30000  | 請求逾時                                          |
 | `volley.followRedirects`      | true   | request 設 global 時是否跟隨導向                  |
 | `volley.maxRedirects`         | 10     | 導向次數上限                                      |
@@ -48,7 +78,7 @@
 ## 保存格式與位置
 
 ```
-<dataFolder>/
+<dataFolder>/                                 # 共用與私人資料夾各自一份相同結構
 ├── .volley.json                              # 格式版本標記
 ├── collections/<名稱>-<id>.openapi.yaml      # 每個 collection 一個標準 OpenAPI 3.1 檔
 └── state/
