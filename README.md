@@ -8,7 +8,7 @@
 - **共用／私人雙資料夾**：`volley.dataFolder`（共用，建議指向雲端同步空間）與 `volley.privateDataFolder`（私人，適合放不同步的個人 collection）完全隔離、各自存檔；兩邊的 collections 同列在選擇器中，以「共用」「私人」分組顯示，各自可新增。
 - **可搜尋選擇器**：collection 與環境選擇器均可輸入文字即時過濾；輸入的名稱不存在時，底部出現「＋ 新增」選項，點擊即以該名稱建立 collection（選共用或私人）或環境。
 - **資料夾管理**：巢狀資料夾、拖曳排序與搬移（顯示插入位置指示線，停在資料夾上會自動展開）、工具列 🗀 新增資料夾、右鍵新增 request／改名/複製/刪除；刪除非空資料夾時可選擇連同內容刪除，或只刪資料夾把內容移到上一層。
-- **環境變數**：Base + 多組 sub-environment（可設色）、資料夾層級變數；解析順序為資料夾（近者優先）→ sub-environment → Base。所有欄位（URL、參數、headers、body、auth）都支援 `{{ _.變數 }}` 片段取代，欄位聚焦時即時預覽解析結果、未定義變數以警告色標示。
+- **環境變數**：Base + 多組 sub-environment（可設色）、資料夾層級變數；解析順序為資料夾（近者優先）→ sub-environment → Base。所有欄位（URL、參數、headers、body、auth）都支援 `{{ _.變數 }}` 片段取代，欄位聚焦時即時預覽解析結果、未定義變數以警告色標示。單行欄位在滑鼠與游標都不在時，變數會收合成只顯示名稱的標籤（省去大括號與 `_.`），滑鼠移入或聚焦即還原成可編輯的原文。
 - **發送請求**：GET/POST/PUT/PATCH/DELETE/OPTIONS/HEAD；query/path 參數、多種 body（JSON/text/XML/YAML/GraphQL/form-urlencoded/multipart/binary）、Basic/Bearer/API Key 認證、cookie jar 自動收送、重新導向跟隨（302/303 依規範降 GET）、逾時與取消。快捷鍵 `Cmd/Ctrl+Enter` 送出。
 - **回應狀態暫存（history）**：每個 request 保留最近 N 筆回應（預設 20，可調），存於資料夾內、跨裝置同步、重開 VSCode 仍在。
 - **匯入**：OpenAPI 3.x、剪貼簿 curl 指令、Insomnia v5 YAML / v4 JSON 匯出檔；也可輸入網址直接下載匯入（自動辨識格式）。

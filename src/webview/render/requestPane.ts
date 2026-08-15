@@ -3,7 +3,7 @@
 
 import type { BodyParam, Header, QueryParam, RequestItem } from '../../core/model/types';
 import { walkRequests } from '../../core/model/types';
-import { containsTemplate, interpolate } from '../../core/vars/template';
+import { containsTemplate, interpolate, parseVarPath } from '../../core/vars/template';
 import { resolveEnvironment } from '../../core/vars/environment';
 import { prettyJson, prettyXml, prettyYaml } from '../../core/formats/prettyPrint';
 import { el, notice, post, render, selectedRequest, state, touch } from '../store';
@@ -91,10 +91,20 @@ function varField(
   const wrapper = el('div', { class: `template-field ${kind === 'textarea' ? 'multiline' : ''} ${fieldClass}` }, overlay, input, suggestions);
   let suggestionIndex = 0;
   let triggerStart = -1;
+  // overlay 與 input 逐字元等寬才對得齊 caret，所以只在「沒有 caret 也沒有滑鼠」時才收合成 chip。
+  // textarea 排除：收合會改變換行數，scrollTop 同步後會指向錯誤的內容。
+  const collapsible = kind === 'input';
+  let focused = false;
+  let hovered = false;
 
   const syncScroll = (): void => {
     overlay.scrollLeft = input.scrollLeft;
     overlay.scrollTop = input.scrollTop;
+  };
+  /** chip 收合時的顯示文字：`{{ _.a.b }}` → `a.b`；無法解析則去掉大括號後原樣顯示。 */
+  const tokenLabel = (token: string): string => {
+    const expr = token.slice(2, -2);
+    return parseVarPath(expr)?.join('.') ?? expr.trim();
   };
   const paint = (): void => {
     overlay.replaceChildren();
@@ -102,6 +112,7 @@ function varField(
       overlay.append(el('span', { class: 'template-placeholder' }, String(fieldProps.placeholder ?? '')));
       return;
     }
+    const collapsed = collapsible && !focused && !hovered;
     let offset = 0;
     for (const match of input.value.matchAll(VAR_TOKEN_RE)) {
       const start = match.index ?? 0;
@@ -109,11 +120,21 @@ function varField(
         overlay.append(document.createTextNode(input.value.slice(offset, start)));
       }
       const missing = interpolate(match[0], currentEnv()).missing.length > 0;
-      overlay.append(el('span', { class: `template-token${missing ? ' missing' : ''}` }, match[0]));
+      overlay.append(el(
+        'span',
+        { class: `template-token${missing ? ' missing' : ''}${collapsed ? ' collapsed' : ''}` },
+        collapsed ? tokenLabel(match[0]) : match[0],
+      ));
       offset = start + match[0].length;
     }
     overlay.append(document.createTextNode(input.value.slice(offset)));
-    syncScroll();
+    if (collapsed) {
+      // 收合後 overlay 比 input 窄，照抄 scrollLeft 會捲過內容尾端
+      overlay.scrollLeft = Math.min(input.scrollLeft, Math.max(0, overlay.scrollWidth - overlay.clientWidth));
+      overlay.scrollTop = 0;
+    } else {
+      syncScroll();
+    }
   };
   const closeSuggestions = (): void => {
     suggestions.classList.remove('open');
@@ -202,10 +223,26 @@ function varField(
       showPreview();
     }
   });
-  input.addEventListener('focus', showPreview);
+  input.addEventListener('focus', () => {
+    focused = true;
+    paint();
+    showPreview();
+  });
   input.addEventListener('blur', () => {
+    focused = false;
+    paint();
     hidePreview();
     closeSuggestions();
+  });
+  // hover 就展開：mouseenter 必定早於 mousedown，點擊時 overlay 已是原文，
+  // 游標落點才會與看到的字元一致。
+  wrapper.addEventListener('mouseenter', () => {
+    hovered = true;
+    paint();
+  });
+  wrapper.addEventListener('mouseleave', () => {
+    hovered = false;
+    paint();
   });
   input.addEventListener('scroll', syncScroll);
   input.addEventListener('keydown', (event) => {

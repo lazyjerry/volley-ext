@@ -181,6 +181,10 @@ textarea {
   box-shadow: inset 0 0 0 1px var(--acc);
 }
 
+.template-token.collapsed {
+  padding: 0 4px;
+}
+
 .template-token.missing {
   box-shadow: inset 0 0 0 1px var(--warn);
   text-decoration: underline wavy var(--warn);
