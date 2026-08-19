@@ -148,8 +148,9 @@ suite('storage/collectionStore', () => {
     const copy = JSON.parse(JSON.stringify(c)) as Collection;
     copy.name = 'self-write';
     store.update(copy);
-    await wait(1300);
+    await wait(600);
     await store.flush();
+    store.checkDisk();
     assert.strictEqual(events.length, 0, '自寫不應觸發外部變更事件');
 
     // 模擬外部（Dropbox）改寫
@@ -161,8 +162,10 @@ suite('storage/collectionStore', () => {
     fs.writeFileSync(filePath, serializeCollection(external), 'utf8');
     const changedTime = new Date();
     fs.utimesSync(filePath, changedTime, changedTime);
-    await wait(1500);
+    store.checkDisk();
     assert.strictEqual(events.length, 1, '外部變更應觸發一次');
+    store.checkDisk();
+    assert.strictEqual(events.length, 1, '同一份變更不應重複觸發');
     assert.strictEqual(events[0].name, 'external-edit');
     store.dispose();
     fs.rmSync(dir, { recursive: true, force: true });
