@@ -25,6 +25,11 @@ export class DualCollectionStore {
     this.rememberAll();
   }
 
+  checkDisk(): void {
+    this.shared.checkDisk();
+    this.priv.checkDisk();
+  }
+
   private rememberAll(): void {
     for (const s of this.shared.list()) {
       this.lastKnownSource.set(s.id, 'shared');

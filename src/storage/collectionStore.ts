@@ -1,6 +1,6 @@
 // Collection 檔案儲存：每 collection 一檔（OpenAPI YAML）。
 // debounce 寫入 → 序列化寫入佇列 → tmp+rename 原子寫 → 自寫守衛；
-// fs.watchFile 輪詢偵測外部變更（Dropbox 回寫）與目錄增刪。
+// 外部變更（Dropbox 回寫）與目錄增刪不輪詢：由 checkDisk() 在面板變可見或手動重新載入時比對磁碟。
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -9,7 +9,6 @@ import { parseCollection, serializeCollection } from '../core/formats/openapiSto
 import { collectionFileName } from './dataFolder';
 
 const WRITE_DEBOUNCE_MS = 500;
-const WATCH_INTERVAL_MS = 500;
 
 export interface Disposable {
   dispose(): void;
@@ -30,7 +29,6 @@ export class CollectionStore implements Disposable {
   private readonly externalChangeListeners = new Set<(collection: Collection) => void>();
   private readonly listChangeListeners = new Set<() => void>();
   private readonly errorListeners = new Set<(message: string) => void>();
-  private dirWatcherActive = false;
 
   constructor(private readonly collectionsDir: string) {}
 
@@ -57,9 +55,6 @@ export class CollectionStore implements Disposable {
 
   /** 掃描資料夾載入全部 collections（啟動與 reload 用）。 */
   loadAll(): Collection[] {
-    for (const entry of this.entries.values()) {
-      fs.unwatchFile(entry.filePath);
-    }
     this.entries.clear();
     let files: string[] = [];
     try {
@@ -79,7 +74,6 @@ export class CollectionStore implements Disposable {
         this.emitError(`無法讀取 ${file}：${err instanceof Error ? err.message : String(err)}`);
       }
     }
-    this.watchDir();
     return out;
   }
 
@@ -137,7 +131,6 @@ export class CollectionStore implements Disposable {
     if (entry.timer) {
       clearTimeout(entry.timer);
     }
-    fs.unwatchFile(entry.filePath);
     this.entries.delete(id);
     this.writeQueue = this.writeQueue.then(() => {
       try {
@@ -170,11 +163,6 @@ export class CollectionStore implements Disposable {
       if (entry.timer) {
         clearTimeout(entry.timer);
       }
-      fs.unwatchFile(entry.filePath);
-    }
-    if (this.dirWatcherActive) {
-      fs.unwatchFile(this.collectionsDir);
-      this.dirWatcherActive = false;
     }
   }
 
@@ -192,7 +180,6 @@ export class CollectionStore implements Disposable {
       lastWrittenMtimeMs: this.statMtime(filePath),
     };
     this.entries.set(collection.id, entry);
-    fs.watchFile(filePath, { interval: WATCH_INTERVAL_MS }, () => this.handleFileChange(entry));
   }
 
   private statMtime(filePath: string): number {
@@ -203,7 +190,7 @@ export class CollectionStore implements Disposable {
     }
   }
 
-  private handleFileChange(entry: Entry): void {
+  private checkEntry(entry: Entry): void {
     // 自寫守衛：pending 或寫入中時忽略（rename 後 mtime 由 enqueueWrite 記錄）
     if (entry.writeInProgress || entry.pending || entry.timer) {
       return;
@@ -227,26 +214,27 @@ export class CollectionStore implements Disposable {
     }
   }
 
-  private watchDir(): void {
-    if (this.dirWatcherActive) {
+  /** 主動比對磁碟：外部改動的檔案發 onExternalChange，檔案增刪發 onListChange。 */
+  checkDisk(): void {
+    for (const entry of [...this.entries.values()]) {
+      this.checkEntry(entry);
+    }
+    this.checkDir();
+  }
+
+  private checkDir(): void {
+    const known = new Set([...this.entries.values()].map((e) => path.basename(e.filePath)));
+    let files: string[] = [];
+    try {
+      files = fs.readdirSync(this.collectionsDir).filter((f) => /\.ya?ml$/i.test(f));
+    } catch {
       return;
     }
-    this.dirWatcherActive = true;
-    // 目錄 mtime 變化（新增/刪除檔案）→ 通知外層 reload
-    fs.watchFile(this.collectionsDir, { interval: 2000 }, () => {
-      const known = new Set([...this.entries.values()].map((e) => path.basename(e.filePath)));
-      let files: string[] = [];
-      try {
-        files = fs.readdirSync(this.collectionsDir).filter((f) => /\.ya?ml$/i.test(f));
-      } catch {
-        return;
-      }
-      const added = files.some((f) => !known.has(f));
-      const removed = [...known].some((f) => !files.includes(f));
-      if (added || removed) {
-        this.emitListChange();
-      }
-    });
+    const added = files.some((f) => !known.has(f));
+    const removed = [...known].some((f) => !files.includes(f));
+    if (added || removed) {
+      this.emitListChange();
+    }
   }
 
   private enqueueWrite(entry: Entry, collection: Collection): void {

@@ -68,6 +68,12 @@ export class ClientViewProvider implements vscode.WebviewViewProvider, vscode.Di
         void this.handleMessage(message);
       }
     });
+    // 沒有檔案輪詢：面板重新可見時才比對磁碟，補上不在前景時發生的外部變更
+    webviewView.onDidChangeVisibility(() => {
+      if (webviewView.visible) {
+        this.deps.collectionStore.checkDisk();
+      }
+    });
     webviewView.onDidDispose(() => {
       this.view = undefined;
     });

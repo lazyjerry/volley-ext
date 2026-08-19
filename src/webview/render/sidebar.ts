@@ -572,6 +572,11 @@ export function renderSidebar(root: HTMLElement): void {
         title: '刪除 collection',
         onclick: () => requireCollection(() => post({ type: 'deleteCollection', collectionId: state.collection!.id })),
       }, codicon('trash')),
+      el('button', {
+        class: 'icon',
+        title: '從磁碟重新載入（外部或其他裝置的變更）',
+        onclick: () => post({ type: 'runCommand', command: 'reload' }),
+      }, codicon('refresh')),
     ),
     el(
       'div',
