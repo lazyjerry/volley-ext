@@ -4,15 +4,18 @@ import type { HostMessage } from '../shared/protocol';
 import { isHostMessage } from '../shared/protocol';
 import { emptyUiState } from '../core/model/types';
 import {
+  editableField,
   el,
   flushPendingEdits,
   getEditRevision,
   hasPendingEdits,
   insertNode,
+  isEditing,
   notice,
   post,
   render,
   selectedRequest,
+  setNoticeRenderFn,
   setRenderFn,
   state,
   touch,
@@ -62,15 +65,6 @@ function showAutosaveToast(): void {
 
 function initAutosaveFeedback(): void {
   const focusedRevisions = new WeakMap<HTMLInputElement | HTMLTextAreaElement, number>();
-  const editableField = (target: EventTarget | null): HTMLInputElement | HTMLTextAreaElement | null => {
-    if (target instanceof HTMLTextAreaElement) {
-      return target.readOnly || target.disabled ? null : target;
-    }
-    if (target instanceof HTMLInputElement && target.type === 'text') {
-      return target.readOnly || target.disabled ? null : target;
-    }
-    return null;
-  };
 
   document.addEventListener('focusin', (ev) => {
     const field = editableField(ev.target);
@@ -89,7 +83,44 @@ function initAutosaveFeedback(): void {
       flushPendingEdits();
       showAutosaveToast();
     }
+    // focusout 時焦點尚未落定，等下一輪確認真的離開欄位了才重繪
+    setTimeout(() => {
+      if (!isEditing()) {
+        applyDeferred();
+      }
+    }, 0);
   });
+}
+
+// 編輯中收到的重繪型 host 訊息先擱著，等焦點離開欄位再套用；同 key 只留最後一則
+const deferred = new Map<string, { message: HostMessage; revision: number }>();
+
+function deferKey(message: HostMessage): string | null {
+  switch (message.type) {
+    case 'collectionChangedOnDisk':
+    case 'collectionListChanged':
+      return message.type;
+    case 'historyLoaded':
+      return `historyLoaded:${message.requestId}`;
+    default:
+      return null;
+  }
+}
+
+function applyDeferred(): void {
+  if (deferred.size === 0) {
+    return;
+  }
+  const pending = [...deferred.values()];
+  deferred.clear();
+  for (const { message, revision } of pending) {
+    // 擱置期間又編輯過 → 本地優先，丟掉磁碟版本（last-writer-wins）
+    if (message.type === 'collectionChangedOnDisk'
+      && (hasPendingEdits() || getEditRevision() !== revision)) {
+      continue;
+    }
+    handleHostMessage(message);
+  }
 }
 
 function renderTabbar(): void {
@@ -164,6 +195,11 @@ function fullRender(): void {
 }
 
 function handleHostMessage(message: HostMessage): void {
+  const key = deferKey(message);
+  if (key && isEditing()) {
+    deferred.set(key, { message, revision: getEditRevision() });
+    return;
+  }
   switch (message.type) {
     case 'init': {
       state.collections = message.collections;
@@ -250,6 +286,7 @@ function handleHostMessage(message: HostMessage): void {
 function boot(): void {
   buildSkeleton();
   setRenderFn(fullRender);
+  setNoticeRenderFn(renderNotices);
   initLayout();
   initSplitters();
   initAutosaveFeedback();

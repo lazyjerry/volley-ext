@@ -68,9 +68,15 @@ export const state: AppState = {
 };
 
 let renderFn: () => void = () => undefined;
+let noticeRenderFn: () => void = () => undefined;
 
 export function setRenderFn(fn: () => void): void {
   renderFn = fn;
+}
+
+/** 通知列的局部重繪；notice 不走全量 render，否則會換掉正在編輯的欄位。 */
+export function setNoticeRenderFn(fn: () => void): void {
+  noticeRenderFn = fn;
 }
 
 export function render(): void {
@@ -79,13 +85,28 @@ export function render(): void {
 
 export function notice(level: string, message: string): void {
   state.notice = { level, message };
-  render();
+  noticeRenderFn();
   setTimeout(() => {
     if (state.notice?.message === message) {
       state.notice = null;
-      render();
+      noticeRenderFn();
     }
   }, 6000);
+}
+
+/** 使用者是否正停在可編輯欄位裡（全量 render 會把它連同 caret 一起換掉）。 */
+export function editableField(target: EventTarget | null): HTMLInputElement | HTMLTextAreaElement | null {
+  if (target instanceof HTMLTextAreaElement) {
+    return target.readOnly || target.disabled ? null : target;
+  }
+  if (target instanceof HTMLInputElement && target.type === 'text') {
+    return target.readOnly || target.disabled ? null : target;
+  }
+  return null;
+}
+
+export function isEditing(): boolean {
+  return editableField(document.activeElement) !== null;
 }
 
 // ---- 持久化 ----
