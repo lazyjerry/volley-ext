@@ -48,6 +48,7 @@ export type HostMessage =
   | { type: 'requestInserted'; request: RequestItem; folderId: string | null }
   | { type: 'curlExported'; requestId: string; text: string }
   | { type: 'folderDeleteConfirmed'; folderId: string; mode: 'all' | 'folderOnly' }
+  | { type: 'envVarDeleteConfirmed'; key: string }
   | { type: 'notice'; level: 'info' | 'warn' | 'error'; message: string };
 
 // Webview → Extension
@@ -60,6 +61,7 @@ export type ClientMessage =
   | { type: 'renameCollection'; collectionId: string }
   | { type: 'deleteCollection'; collectionId: string }
   | { type: 'confirmDeleteFolder'; folderId: string; name: string; requestCount: number; folderCount: number }
+  | { type: 'confirmDeleteEnvVar'; key: string }
   | { type: 'showNotice'; level: 'info' | 'warn' | 'error'; message: string }
   | { type: 'updateCollection'; collection: Collection }
   | { type: 'sendRequest'; collectionId: string; requestId: string }

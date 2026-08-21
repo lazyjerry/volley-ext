@@ -187,6 +187,17 @@ export class ClientViewProvider implements vscode.WebviewViewProvider, vscode.Di
         }
         break;
       }
+      case 'confirmDeleteEnvVar': {
+        const choice = await vscode.window.showWarningMessage(
+          `刪除環境變數「${message.key}」？`,
+          { modal: true },
+          '刪除',
+        );
+        if (choice === '刪除') {
+          this.post({ type: 'envVarDeleteConfirmed', key: message.key });
+        }
+        break;
+      }
       case 'showNotice': {
         if (message.level === 'error') {
           void vscode.window.showErrorMessage(message.message);
