@@ -999,3 +999,67 @@ table.plain th {
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+
+/* ---- 面板內搜尋（Cmd/Ctrl+F） ---- */
+
+.find-bar {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+  border-bottom: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.2));
+}
+
+.find-bar .find-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.find-bar.no-match .find-input {
+  border: 1px solid var(--vscode-inputValidation-errorBorder, var(--warn));
+}
+
+.find-count {
+  flex: 0 0 auto;
+  min-width: 54px;
+  text-align: right;
+  font-size: 0.85em;
+  opacity: 0.75;
+}
+
+.find-bar .find-toggle.active {
+  color: var(--acc);
+  box-shadow: inset 0 0 0 1px var(--acc);
+}
+
+mark.find-hit {
+  background: var(--vscode-editor-findMatchHighlightBackground, rgba(234, 92, 0, 0.33));
+  color: inherit;
+  border-radius: 2px;
+}
+
+mark.find-hit.find-current {
+  background: var(--vscode-editor-findMatchBackground, rgba(234, 92, 0, 0.66));
+  box-shadow: inset 0 0 0 1px var(--acc);
+}
+
+/* 值只存在 input.value 的欄位：DOM 裡沒有文字可標，改標整格 */
+.find-field-hit {
+  box-shadow: inset 0 0 0 1px var(--acc-secondary);
+}
+
+.find-field-hit.find-current {
+  box-shadow: inset 0 0 0 2px var(--acc);
+}
+
+/* 搜尋 request 時把 URL 一併顯示，讓命中處看得見也標得到 */
+.tree-url {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 0.85em;
+  opacity: 0.6;
+}

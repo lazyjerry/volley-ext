@@ -12,6 +12,7 @@ import {
   state,
   touchUi,
 } from '../store';
+import { createFindBar } from './findBar';
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) {
@@ -217,6 +218,16 @@ export function renderResponsePane(root: HTMLElement): void {
   root.append(subtabs);
 
   const body = el('div', { class: 'pane-body' });
+  // 搜尋列吃的是目前分頁已渲染出來的內容，切分頁後由 refresh() 重新標示
+  const findBar = createFindBar({
+    findState: state.find.response,
+    target: () => body,
+    placeholder: '搜尋回應內容…',
+    onClose: () => render(),
+  });
+  if (findBar) {
+    root.append(findBar.element);
+  }
   switch (state.responseTab) {
     case 'headers':
       body.append(headersTab(record));
@@ -231,4 +242,5 @@ export function renderResponsePane(root: HTMLElement): void {
       body.append(previewTab(record));
   }
   root.append(body);
+  findBar?.refresh();
 }

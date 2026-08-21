@@ -18,6 +18,7 @@ import {
 } from '../store';
 import { openEnvEditor } from './envEditor';
 import { combobox } from './combobox';
+import { createFindBar } from './findBar';
 
 function codicon(name: string): HTMLElement {
   return el('span', { class: `codicon codicon-${name}` });
@@ -279,6 +280,35 @@ function nodeMenu(node: TreeNode, ev: MouseEvent): void {
 
 // ---- 樹渲染 ----
 
+// 搜尋期間要暫時展開命中節點的祖先資料夾；不寫進 ui.expandedFolders，關掉搜尋就恢復原樣。
+let searchExpand = new Set<string>();
+// URL 平常只放在 title 屬性，搜尋時得把它渲染出來，否則命中了卻標不出來也看不到
+let searchQuery = '';
+
+function nodeMatches(node: TreeNode, query: string): boolean {
+  const haystack = isFolder(node)
+    ? node.name
+    : `${node.method} ${node.name} ${node.url}`;
+  return haystack.toLowerCase().includes(query);
+}
+
+/** 回傳「子孫中有命中」的資料夾 id 集合。 */
+function collectSearchExpand(nodes: TreeNode[], query: string, acc: Set<string>): boolean {
+  let hit = false;
+  for (const node of nodes) {
+    if (isFolder(node)) {
+      const childHit = collectSearchExpand(node.children, query, acc);
+      if (childHit) {
+        acc.add(node.id);
+      }
+      hit = hit || childHit || nodeMatches(node, query);
+    } else if (nodeMatches(node, query)) {
+      hit = true;
+    }
+  }
+  return hit;
+}
+
 function renameInput(node: TreeNode): HTMLElement {
   const input = el('input', { type: 'text', value: node.name, class: 'tree-label' });
   const commit = (): void => {
@@ -395,7 +425,7 @@ function setupDrag(row: HTMLElement, node: TreeNode): void {
 function renderNode(node: TreeNode): HTMLElement {
   const container = el('div', { class: 'tree-node' });
   if (isFolder(node)) {
-    const expanded = state.ui.expandedFolders.includes(node.id);
+    const expanded = state.ui.expandedFolders.includes(node.id) || searchExpand.has(node.id);
     const row = el(
       'div',
       {
@@ -437,6 +467,7 @@ function renderNode(node: TreeNode): HTMLElement {
       },
       el('span', { class: `method-tag method-${node.method}` }, node.method),
       state.renamingNodeId === node.id ? renameInput(node) : el('span', { class: 'tree-label', title: node.url }, node.name || node.url || '(未命名)'),
+      searchQuery !== '' && node.name !== '' && node.url !== '' ? el('span', { class: 'tree-url' }, node.url) : null,
     );
     if (state.renamingNodeId !== node.id) {
       setupDrag(row, node);
@@ -468,6 +499,14 @@ function addEnvironment(name: string): void {
 export function renderSidebar(root: HTMLElement): void {
   root.replaceChildren();
   const collection = state.collection;
+
+  const findState = state.find.sidebar;
+  const query = findState.open ? findState.query.trim().toLowerCase() : '';
+  searchExpand = new Set<string>();
+  searchQuery = query;
+  if (query !== '' && collection) {
+    collectSearchExpand(collection.children, query, searchExpand);
+  }
 
   // collection 選擇列：可搜尋，共用／私人分組，輸入新名稱可直接新增
   const collectionSelect = combobox({
@@ -590,6 +629,19 @@ export function renderSidebar(root: HTMLElement): void {
   );
   root.append(header);
 
+  // 搜尋 request 名稱／method／URL：命中的資料夾暫時展開，命中的文字直接在樹上標色
+  const findBar = createFindBar({
+    findState,
+    target: () => root.querySelector<HTMLElement>('.tree'),
+    placeholder: '搜尋 request 名稱或網址…',
+    // 查詢字串會改變展開狀態，必須重畫整棵樹後才重新標示
+    onQueryChange: () => renderSidebar(root),
+    onClose: () => renderSidebar(root),
+  });
+  if (findBar) {
+    root.append(findBar.element);
+  }
+
   const tree = el('div', {
     class: 'tree',
     oncontextmenu: (ev: MouseEvent) => {
@@ -643,4 +695,5 @@ export function renderSidebar(root: HTMLElement): void {
     }
   }
   root.append(tree);
+  findBar?.refresh();
 }

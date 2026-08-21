@@ -1,5 +1,6 @@
 // webview 進入點：DOM 骨架、host 訊息處理、渲染協調。
 
+import type { FindKey } from './store';
 import type { HostMessage } from '../shared/protocol';
 import { isHostMessage } from '../shared/protocol';
 import { emptyUiState } from '../core/model/types';
@@ -286,6 +287,66 @@ function handleHostMessage(message: HostMessage): void {
   }
 }
 
+// ---- 面板內搜尋 ----
+
+const PANE_OF_FIND: Array<[FindKey, string]> = [
+  ['sidebar', 'pane-sidebar'],
+  ['request', 'pane-request'],
+  ['response', 'pane-response'],
+];
+
+// webview 沒有 VSCode 的尋找工具列，Cmd/Ctrl+F 由我們自己接；焦點不在任何面板時
+// 用最後互動過的面板（窄版則用目前分頁），避免使用者按了卻沒反應。
+let lastPane: FindKey = 'response';
+
+function paneOf(target: EventTarget | null): FindKey | null {
+  if (!(target instanceof HTMLElement)) {
+    return null;
+  }
+  for (const [key, id] of PANE_OF_FIND) {
+    if (target.closest(`#${id}`)) {
+      return key;
+    }
+  }
+  return null;
+}
+
+function focusedPane(): FindKey {
+  // 環境編輯器是覆蓋主區域的 overlay，開著時搜尋一定是針對它
+  if (state.envEditor) {
+    return 'env';
+  }
+  return paneOf(document.activeElement) ?? (state.isNarrow ? state.narrowTab : lastPane);
+}
+
+function initFind(): void {
+  const trackPane = (ev: Event): void => {
+    const pane = paneOf(ev.target);
+    if (pane) {
+      lastPane = pane;
+    }
+  };
+  document.addEventListener('focusin', trackPane);
+  document.addEventListener('pointerdown', trackPane, true);
+
+  window.addEventListener('keydown', (ev) => {
+    if (!(ev.metaKey || ev.ctrlKey) || ev.altKey || ev.key.toLowerCase() !== 'f') {
+      return;
+    }
+    ev.preventDefault();
+    const key = focusedPane();
+    const findState = state.find[key];
+    findState.open = true;
+    findState.focused = true;
+    findState.caret = findState.query.length;
+    findState.selectAll = true;
+    if (state.isNarrow && key !== 'env') {
+      state.narrowTab = key;
+    }
+    render();
+  });
+}
+
 function boot(): void {
   buildSkeleton();
   setRenderFn(fullRender);
@@ -322,6 +383,8 @@ function boot(): void {
       }
     }
   });
+
+  initFind();
 
   render();
   post({ type: 'ready' });
