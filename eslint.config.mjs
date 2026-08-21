@@ -3,7 +3,7 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
-    ignores: ['.vscode-test/', 'media/main.js', 'node_modules/', 'out/', 'out 2/'],
+    ignores: ['.vscode-test/', 'media/main.js', '**/*衝突的複本*', 'node_modules/', 'out/', 'out 2/'],
   },
   eslint.configs.recommended,
   ...tseslint.configs.recommended,
