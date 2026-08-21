@@ -4,6 +4,7 @@
 
 import { isFolder } from '../../core/model/types';
 import { el, findNode, flushPendingEdits, post, render, state, touch, touchUi } from '../store';
+import { createFindBar } from './findBar';
 
 export function openEnvEditor(target: 'collection' | { folderId: string }): void {
   state.envEditor = { target, selectedEnvId: 'base', rawMode: 'off', dirty: false };
@@ -386,6 +387,15 @@ export function renderEnvEditor(): HTMLElement | null {
   detail.append(toolbar);
 
   const body = el('div', { class: 'pane-body' });
+  const findBar = createFindBar({
+    findState: state.find.env,
+    target: () => body,
+    placeholder: '搜尋變數名稱或值…',
+    onClose: () => render(),
+  });
+  if (findBar) {
+    detail.append(findBar.element);
+  }
   if (!target) {
     body.append(el('div', { class: 'hint' }, '找不到目標環境。'));
   } else if (editor.rawMode !== 'off') {
@@ -433,5 +443,7 @@ export function renderEnvEditor(): HTMLElement | null {
   }
   detail.append(body);
   overlay.append(detail);
+  // overlay 由 main.ts 掛進 DOM，掛上去之後才標得到、也才捲得到命中處
+  queueMicrotask(() => findBar?.refresh());
   return overlay;
 }

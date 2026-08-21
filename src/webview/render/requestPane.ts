@@ -8,6 +8,24 @@ import { resolveEnvironment } from '../../core/vars/environment';
 import { prettyJson, prettyXml, prettyYaml } from '../../core/formats/prettyPrint';
 import { el, notice, post, render, selectedRequest, state, touch } from '../store';
 import { renderResponsePane } from './responsePane';
+import { createFindBar } from './findBar';
+
+// varField 的 overlay 每次 paint() 都整個重建，會把搜尋標示一起清掉；重畫後補標一次。
+// 補標不能捲動畫面——paint() 也發生在 hover，捲動會把使用者正在看的位置甩掉。
+let refreshRequestFind: ((reveal?: boolean) => void) | null = null;
+let remarking = false;
+
+function remarkAfterPaint(): void {
+  if (!refreshRequestFind || remarking || state.find.request.query === '') {
+    return;
+  }
+  remarking = true;
+  try {
+    refreshRequestFind(false);
+  } finally {
+    remarking = false;
+  }
+}
 
 const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'];
 
@@ -128,6 +146,7 @@ function varField(
       offset = start + match[0].length;
     }
     overlay.append(document.createTextNode(input.value.slice(offset)));
+    remarkAfterPaint();
     if (collapsed) {
       // 收合後 overlay 比 input 窄，照抄 scrollLeft 會捲過內容尾端
       overlay.scrollLeft = Math.min(input.scrollLeft, Math.max(0, overlay.scrollWidth - overlay.clientWidth));
@@ -564,6 +583,8 @@ function docsTab(request: RequestItem): HTMLElement {
 
 export function renderRequestPane(root: HTMLElement): void {
   root.replaceChildren();
+  // 舊的 handle 指向已被換掉的 body，重繪期間 paint() 不該再拿它補標
+  refreshRequestFind = null;
   const request = selectedRequest();
   if (!request || !state.collection) {
     root.append(
@@ -631,6 +652,15 @@ export function renderRequestPane(root: HTMLElement): void {
   root.append(subtabs);
 
   const body = el('div', { class: 'pane-body' });
+  const findBar = createFindBar({
+    findState: state.find.request,
+    target: () => body,
+    placeholder: '搜尋此分頁的欄位…',
+    onClose: () => render(),
+  });
+  if (findBar) {
+    root.append(findBar.element);
+  }
   switch (state.requestTab) {
     case 'body':
       body.append(bodyTab(request));
@@ -648,4 +678,6 @@ export function renderRequestPane(root: HTMLElement): void {
       body.append(paramsTab(request));
   }
   root.append(body);
+  refreshRequestFind = findBar ? findBar.refresh : null;
+  findBar?.refresh();
 }

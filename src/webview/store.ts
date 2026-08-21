@@ -27,6 +27,26 @@ export function post(message: ClientMessage): void {
 
 export type NarrowTab = 'sidebar' | 'request' | 'response';
 
+export type FindKey = 'sidebar' | 'request' | 'response' | 'env';
+
+/** 面板內搜尋的暫時狀態；不進 UiState，不落磁碟。 */
+export interface FindState {
+  open: boolean;
+  query: string;
+  /** 目前停在第幾個命中（0-based），巡覽時由 applyFind 夾回範圍內 */
+  index: number;
+  matchCase: boolean;
+  /** 面板重繪前搜尋框是否有焦點；重繪後據此把焦點與 caret 還回去 */
+  focused: boolean;
+  caret: number;
+  /** 再按一次 Cmd/Ctrl+F：重繪後把既有查詢字串全選，直接打字即可換字 */
+  selectAll: boolean;
+}
+
+export function emptyFindState(): FindState {
+  return { open: false, query: '', index: 0, matchCase: false, focused: false, caret: 0, selectAll: false };
+}
+
 export interface AppState {
   collections: CollectionSummary[];
   collection: Collection | null;
@@ -46,6 +66,7 @@ export interface AppState {
   envEditor: null | { target: 'collection' | { folderId: string }; selectedEnvId: string | 'base'; rawMode: 'off' | 'full' | 'dataOnly'; dirty: boolean };
   renamingNodeId: string | null;
   notice: { level: string; message: string } | null;
+  find: Record<FindKey, FindState>;
 }
 
 export const state: AppState = {
@@ -66,6 +87,12 @@ export const state: AppState = {
   envEditor: null,
   renamingNodeId: null,
   notice: null,
+  find: {
+    sidebar: emptyFindState(),
+    request: emptyFindState(),
+    response: emptyFindState(),
+    env: emptyFindState(),
+  },
 };
 
 let renderFn: () => void = () => undefined;
