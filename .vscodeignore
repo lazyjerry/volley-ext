@@ -25,3 +25,4 @@ out/test/**
 out/**/*.map
 out 2/**
 media/**/*.map
+**/*衝突的複本*
