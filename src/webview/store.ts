@@ -42,7 +42,8 @@ export interface AppState {
   historyByRequest: Map<string, ResponseRecord[]>;
   fullBodyByResponseId: Map<string, string>;
   variablePreview: { result: string; missing: string[] } | null;
-  envEditor: null | { target: 'collection' | { folderId: string }; selectedEnvId: string | 'base'; rawMode: boolean; dirty: boolean };
+  /** rawMode：off = 表格；full = 含註解的包裝 JSON；dataOnly = 純變數 map */
+  envEditor: null | { target: 'collection' | { folderId: string }; selectedEnvId: string | 'base'; rawMode: 'off' | 'full' | 'dataOnly'; dirty: boolean };
   renamingNodeId: string | null;
   notice: { level: string; message: string } | null;
 }

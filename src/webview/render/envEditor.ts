@@ -3,10 +3,10 @@
 // 資料夾層級變數由資料夾右鍵進入，編輯該資料夾的 environment 物件。
 
 import { isFolder } from '../../core/model/types';
-import { el, findNode, flushPendingEdits, render, state, touch, touchUi } from '../store';
+import { el, findNode, flushPendingEdits, post, render, state, touch, touchUi } from '../store';
 
 export function openEnvEditor(target: 'collection' | { folderId: string }): void {
-  state.envEditor = { target, selectedEnvId: 'base', rawMode: false, dirty: false };
+  state.envEditor = { target, selectedEnvId: 'base', rawMode: 'off', dirty: false };
   render();
 }
 
@@ -44,7 +44,14 @@ function closeButton(): HTMLElement {
   }, el('span', { class: `codicon codicon-${dirty ? 'save' : 'close'}` }));
 }
 
-function targetData(): { data: Record<string, unknown>; setData: (d: Record<string, unknown>) => void } | null {
+interface EnvTarget {
+  data: Record<string, unknown>;
+  setData: (d: Record<string, unknown>) => void;
+  descriptions: Record<string, string>;
+  setDescriptions: (d: Record<string, string>) => void;
+}
+
+function targetData(): EnvTarget | null {
   const editor = state.envEditor;
   const collection = state.collection;
   if (!editor || !collection) {
@@ -61,24 +68,26 @@ function targetData(): { data: Record<string, unknown>; setData: (d: Record<stri
       setData: (d) => {
         folder.environment = d;
       },
-    };
-  }
-  if (editor.selectedEnvId === 'base') {
-    return {
-      data: collection.environments.base.data,
-      setData: (d) => {
-        collection.environments.base.data = d;
+      descriptions: folder.environmentDescriptions ?? {},
+      setDescriptions: (d) => {
+        folder.environmentDescriptions = Object.keys(d).length > 0 ? d : undefined;
       },
     };
   }
-  const sub = collection.environments.subEnvironments.find((s) => s.id === editor.selectedEnvId);
-  if (!sub) {
+  const env = editor.selectedEnvId === 'base'
+    ? collection.environments.base
+    : collection.environments.subEnvironments.find((s) => s.id === editor.selectedEnvId);
+  if (!env) {
     return null;
   }
   return {
-    data: sub.data,
+    data: env.data,
     setData: (d) => {
-      sub.data = d;
+      env.data = d;
+    },
+    descriptions: env.descriptions ?? {},
+    setDescriptions: (d) => {
+      env.descriptions = Object.keys(d).length > 0 ? d : undefined;
     },
   };
 }
@@ -153,25 +162,72 @@ function envList(): HTMLElement {
   return box;
 }
 
-function kvEditor(data: Record<string, unknown>, setData: (d: Record<string, unknown>) => void): HTMLElement {
+/** 複製列時的 key 去重：base_url → base_url_copy → base_url_copy2 … */
+function uniqueKey(key: string, taken: Set<string>): string {
+  const base = `${key}_copy`;
+  if (!taken.has(base)) {
+    return base;
+  }
+  let n = 2;
+  while (taken.has(`${base}${n}`)) {
+    n++;
+  }
+  return `${base}${n}`;
+}
+
+/** 新列一定要有 key：空 key 的列會被 rebuild 丟掉，重繪後就消失了。 */
+function nextVarKey(taken: Set<string>): string {
+  let n = taken.size + 1;
+  while (taken.has(`var${n}`)) {
+    n++;
+  }
+  return `var${n}`;
+}
+
+/** host modal 確認刪除後回來：以當下環境為準重查，避免 modal 期間切了環境。 */
+export function applyEnvVarDelete(key: string): void {
+  const target = targetData();
+  if (!target || !(key in target.data)) {
+    return;
+  }
+  delete target.data[key];
+  const descriptions = { ...target.descriptions };
+  delete descriptions[key];
+  target.setDescriptions(descriptions);
+  touch();
+  markDirty();
+  render();
+}
+
+type KvEntry = [key: string, value: unknown, comment: string];
+
+function kvEditor(target: EnvTarget): HTMLElement {
   const box = el('div', { class: 'kv-table' });
-  const entries = Object.entries(data);
-  const rebuild = (updated: Array<[string, unknown]>): void => {
+  const entries: KvEntry[] = Object.entries(target.data).map(
+    ([k, v]) => [k, v, target.descriptions[k] ?? ''],
+  );
+  const rebuild = (updated: KvEntry[]): void => {
     const next: Record<string, unknown> = {};
-    for (const [k, v] of updated) {
-      if (k !== '') {
-        next[k] = v;
+    const nextDescriptions: Record<string, string> = {};
+    for (const [k, v, comment] of updated) {
+      if (k === '') {
+        continue;
+      }
+      next[k] = v;
+      if (comment !== '') {
+        nextDescriptions[k] = comment;
       }
     }
-    setData(next);
+    target.setData(next);
+    target.setDescriptions(nextDescriptions);
     touch();
     markDirty();
   };
-  entries.forEach(([key, value], idx) => {
+  entries.forEach(([key, value, comment], idx) => {
     const isComplex = typeof value === 'object' && value !== null;
-    const keyInput = el('input', { type: 'text', class: 'k', value: key, spellcheck: false });
+    const keyInput = el('input', { type: 'text', class: 'k', value: key, spellcheck: false, placeholder: '名稱' });
     keyInput.addEventListener('input', () => {
-      entries[idx] = [keyInput.value, entries[idx][1]];
+      entries[idx] = [keyInput.value, entries[idx][1], entries[idx][2]];
       rebuild(entries);
     });
     const valueInput = el('input', {
@@ -192,20 +248,57 @@ function kvEditor(data: Record<string, unknown>, setData: (d: Record<string, unk
       } else if (/^-?\d+(\.\d+)?$/.test(valueInput.value.trim())) {
         parsed = Number(valueInput.value);
       }
-      entries[idx] = [entries[idx][0], parsed];
+      entries[idx] = [entries[idx][0], parsed, entries[idx][2]];
+      rebuild(entries);
+    });
+    const commentInput = el('input', {
+      type: 'text',
+      class: 'c',
+      spellcheck: false,
+      value: comment,
+      placeholder: '註解',
+      title: '此變數的用途說明（不會送出、不會匯出到 Insomnia）',
+    });
+    commentInput.addEventListener('input', () => {
+      entries[idx] = [entries[idx][0], entries[idx][1], commentInput.value];
       rebuild(entries);
     });
     box.append(
       el('div', { class: 'kv-row' },
         keyInput,
         valueInput,
+        commentInput,
+        el('button', {
+          class: 'icon',
+          title: '在下方新增一列',
+          onclick: () => {
+            entries.splice(idx + 1, 0, [nextVarKey(new Set(entries.map((e) => e[0]))), '', '']);
+            rebuild(entries);
+            render();
+          },
+        }, '＋'),
+        el('button', {
+          class: 'icon',
+          title: '複製此列',
+          onclick: () => {
+            const taken = new Set(entries.map((e) => e[0]));
+            entries.splice(idx + 1, 0, [uniqueKey(entries[idx][0], taken), entries[idx][1], entries[idx][2]]);
+            rebuild(entries);
+            render();
+          },
+        }, '⧉'),
         el('button', {
           class: 'icon',
           title: '刪除',
           onclick: () => {
-            entries.splice(idx, 1);
-            rebuild(entries);
-            render();
+            // 尚未命名的空白列不值得跳確認，就地刪掉
+            if (entries[idx][0] === '') {
+              entries.splice(idx, 1);
+              rebuild(entries);
+              render();
+              return;
+            }
+            post({ type: 'confirmDeleteEnvVar', key: entries[idx][0] });
           },
         }, '✕'),
       ),
@@ -215,7 +308,7 @@ function kvEditor(data: Record<string, unknown>, setData: (d: Record<string, unk
     el('div', {}, el('button', {
       class: 'secondary',
       onclick: () => {
-        entries.push([`var${entries.length + 1}`, '']);
+        entries.push([nextVarKey(new Set(entries.map((e) => e[0]))), '', '']);
         rebuild(entries);
         render();
       },
@@ -272,15 +365,19 @@ export function renderEnvEditor(): HTMLElement | null {
     toolbar.append(el('span', { style: 'font-weight:600' }, `資料夾變數：${folder && isFolder(folder) ? folder.name : ''}`));
   }
 
-  toolbar.append(
+  const rawToggle = (mode: 'full' | 'dataOnly', label: string, style?: string): HTMLElement =>
     el('button', {
       class: 'secondary',
-      style: 'margin-left:auto',
+      style,
       onclick: () => {
-        editor.rawMode = !editor.rawMode;
+        editor.rawMode = editor.rawMode === mode ? 'off' : mode;
         render();
       },
-    }, editor.rawMode ? '表格編輯' : '原始 JSON'),
+    }, editor.rawMode === mode ? '表格編輯' : label);
+
+  toolbar.append(
+    rawToggle('full', '原始 JSON', 'margin-left:auto'),
+    rawToggle('dataOnly', '不含註解 JSON'),
   );
   if (!isCollectionTarget) {
     // 資料夾變數編輯沒有左側環境清單，關閉鈕放在這裡
@@ -291,14 +388,35 @@ export function renderEnvEditor(): HTMLElement | null {
   const body = el('div', { class: 'pane-body' });
   if (!target) {
     body.append(el('div', { class: 'hint' }, '找不到目標環境。'));
-  } else if (editor.rawMode) {
+  } else if (editor.rawMode !== 'off') {
+    const withComments = editor.rawMode === 'full';
     const textarea = el('textarea', { class: 'raw', spellcheck: false });
-    textarea.value = JSON.stringify(target.data, null, 2);
-    const hint = el('div', { class: 'hint' }, '直接編輯 JSON；輸入時套用（不合法 JSON 不套用）。');
+    textarea.value = withComments
+      ? JSON.stringify(
+        Object.keys(target.descriptions).length > 0
+          ? { data: target.data, descriptions: target.descriptions }
+          : { data: target.data },
+        null,
+        2,
+      )
+      : JSON.stringify(target.data, null, 2);
+    const hint = el('div', { class: 'hint' }, withComments
+      ? '直接編輯 JSON；輸入時套用（不合法 JSON 不套用）。data = 變數、descriptions = 各變數的註解。'
+      : '直接編輯 JSON；輸入時套用（不合法 JSON 不套用）。此模式只有變數值，註解不在其中；移除的變數其註解會一併清掉。');
     textarea.addEventListener('input', () => {
       try {
         const parsed = JSON.parse(textarea.value) as Record<string, unknown>;
-        target.setData(parsed);
+        const data = withComments
+          ? ((parsed.data ?? {}) as Record<string, unknown>)
+          : parsed;
+        target.setData(data);
+        const descriptions = withComments
+          ? ((parsed.descriptions ?? {}) as Record<string, string>)
+          : target.descriptions;
+        // 只留仍存在的變數的註解
+        target.setDescriptions(
+          Object.fromEntries(Object.entries(descriptions).filter(([k]) => k in data)),
+        );
         touch();
         markDirty();
         hint.textContent = '已套用。';
@@ -309,8 +427,8 @@ export function renderEnvEditor(): HTMLElement | null {
     body.append(hint, textarea);
   } else {
     body.append(
-      el('div', { class: 'hint' }, '值支援字串/數字；輸入 { 或 [ 開頭視為 JSON。變數以 {{ _.名稱 }} 於欄位中引用。'),
-      kvEditor(target.data, target.setData),
+      el('div', { class: 'hint' }, '值支援字串/數字；輸入 { 或 [ 開頭視為 JSON。變數以 {{ _.名稱 }} 於欄位中引用。註解僅供閱讀，不會送出。'),
+      kvEditor(target),
     );
   }
   detail.append(body);

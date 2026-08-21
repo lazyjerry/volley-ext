@@ -50,6 +50,7 @@ interface FlatFolder {
   description?: string;
   sortKey: number;
   environment?: Record<string, unknown>;
+  environmentDescriptions?: Record<string, string>;
   headers?: Header[];
   authentication?: Authentication;
   scripts?: Scripts;
@@ -91,6 +92,7 @@ function flattenFolders(children: TreeNode[], parentId: string | null, out: Flat
           description: node.description,
           sortKey: node.sortKey,
           environment: node.environment,
+          environmentDescriptions: node.environmentDescriptions,
           headers: node.headers,
           authentication: node.authentication,
           scripts: node.scripts,
@@ -265,6 +267,7 @@ export function parseCollection(text: string): Collection {
         description: f.description,
         sortKey: f.sortKey ?? 0,
         environment: f.environment,
+        environmentDescriptions: f.environmentDescriptions,
         headers: f.headers,
         authentication: f.authentication,
         scripts: f.scripts,

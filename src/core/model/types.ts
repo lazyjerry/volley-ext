@@ -96,6 +96,8 @@ export interface Folder {
   description?: string;
   sortKey: number;
   environment?: Record<string, unknown>;
+  /** environment 各 key 的註解，key 對 key（environment 本身要維持純變數 map） */
+  environmentDescriptions?: Record<string, string>;
   headers?: Header[];
   authentication?: Authentication;
   scripts?: Scripts;
@@ -109,6 +111,8 @@ export interface EnvironmentData {
   name: string;
   color?: string | null;
   data: Record<string, unknown>;
+  /** data 各 key 的註解，key 對 key（data 本身要維持純變數 map） */
+  descriptions?: Record<string, string>;
 }
 
 export interface SubEnvironment extends EnvironmentData {

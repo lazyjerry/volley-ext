@@ -26,7 +26,7 @@ import { applyColumnWidths, applyLayoutClass, initLayout, initSplitters } from '
 import { applyFolderDelete, renderSidebar } from './render/sidebar';
 import { renderRequestPane } from './render/requestPane';
 import { renderResponsePane } from './render/responsePane';
-import { renderEnvEditor } from './render/envEditor';
+import { applyEnvVarDelete, renderEnvEditor } from './render/envEditor';
 
 function buildSkeleton(): void {
   const app = document.getElementById('app')!;
@@ -273,6 +273,9 @@ function handleHostMessage(message: HostMessage): void {
     }
     case 'folderDeleteConfirmed':
       applyFolderDelete(message.folderId, message.mode);
+      break;
+    case 'envVarDeleteConfirmed':
+      applyEnvVarDelete(message.key);
       break;
     case 'curlExported':
       // 已由 extension 端複製到剪貼簿；此處僅提示

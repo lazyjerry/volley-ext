@@ -10,6 +10,17 @@ suite('openapiStore', () => {
     assert.deepStrictEqual(restored, original);
   });
 
+  test('環境變數註解 round-trip（env descriptions 與 folder environmentDescriptions）', () => {
+    const c = sampleCollection();
+    c.environments.base.descriptions = { base_url: 'API 進入點' };
+    c.environments.subEnvironments[0].descriptions = { token: '正式站權杖' };
+    const folder = c.children[0];
+    if (folder.kind === 'folder') {
+      folder.environmentDescriptions = { region: '機房區域' };
+    }
+    assert.deepStrictEqual(parseCollection(serializeCollection(c)), c);
+  });
+
   test('paths 投影：base_url 變數字首轉為 OpenAPI path', () => {
     const doc = YAML.parse(serializeCollection(sampleCollection())) as Record<string, unknown>;
     const paths = doc.paths as Record<string, unknown>;

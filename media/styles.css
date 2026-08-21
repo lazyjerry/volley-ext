@@ -966,6 +966,27 @@ table.plain th {
   min-height: 160px;
 }
 
+/* 環境變數列用裸 input（非 requestPane 的 .template-field 包裝），寬度得自己給 */
+#env-editor .kv-row input.k {
+  flex: 0 0 26%;
+  min-width: 72px;
+}
+
+#env-editor .kv-row input.v {
+  flex: 1 1 42%;
+  min-width: 72px;
+}
+
+#env-editor .kv-row input.c {
+  flex: 1 1 32%;
+  min-width: 72px;
+  opacity: 0.8;
+}
+
+#env-editor .kv-row button.icon {
+  flex: 0 0 auto;
+}
+
 .muted {
   opacity: 0.65;
 }
