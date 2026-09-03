@@ -750,9 +750,17 @@ body.vscode-light .subtab-badge {
   gap: 6px;
 }
 
-/* 美化按鈕靠右，與格式選單同一行 */
-.body-toolbar > button {
+/* 美化／複製按鈕靠右，與格式選單同一行 */
+.body-toolbar > .toolbar-actions {
   margin-left: auto;
+  display: flex;
+  gap: 6px;
+}
+
+.resp-toolbar {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
 }
 
 .body-editor > .template-field.multiline {

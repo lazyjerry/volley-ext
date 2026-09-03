@@ -71,6 +71,7 @@ export type ClientMessage =
   | { type: 'updateUiState'; collectionId: string; state: UiState }
   | { type: 'importCurlText'; collectionId: string; folderId: string | null; text: string }
   | { type: 'exportCurl'; collectionId: string; requestId: string; copyToClipboard: boolean }
+  | { type: 'copyText'; text: string; label: string }
   | {
       type: 'runCommand';
       command:

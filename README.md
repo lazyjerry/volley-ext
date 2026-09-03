@@ -11,6 +11,7 @@
 - **環境變數**：Base + 多組 sub-environment（可設色）、資料夾層級變數；解析順序為資料夾（近者優先）→ sub-environment → Base。所有欄位（URL、參數、headers、body、auth）都支援 `{{ _.變數 }}` 片段取代，欄位聚焦時即時預覽解析結果、未定義變數以警告色標示。單行欄位在滑鼠與游標都不在時，變數會收合成只顯示名稱的標籤（省去大括號與 `_.`），滑鼠移入或聚焦即還原成可編輯的原文。
 - **發送請求**：GET/POST/PUT/PATCH/DELETE/OPTIONS/HEAD；query/path 參數、多種 body（JSON/text/XML/YAML/GraphQL/form-urlencoded/multipart/binary）、Basic/Bearer/API Key 認證、cookie jar 自動收送、重新導向跟隨（302/303 依規範降 GET）、逾時與取消。快捷鍵 `Cmd/Ctrl+Enter` 送出。
 - **面板內搜尋**：`Cmd/Ctrl+F` 在目前焦點所在的面板開啟搜尋列——回應（Preview／Headers／Cookies／Console）、request 分頁欄位、左側 request 樹、環境變數編輯器都適用。命中處直接標色，`Enter`／`Shift+Enter` 上下巡覽、`Aa` 切換區分大小寫、`Esc` 關閉。搜尋 request 樹時會暫時展開含命中項的資料夾並一併顯示 URL（關掉搜尋即恢復原本展開狀態）。
+- **一鍵複製**：request body 工具列與回應 Preview 各有「複製」鈕——前者複製 body 原文（`{{ _.變數 }}` 不展開），後者複製目前顯示的內容（格式化或原始，依當下檢視模式）。
 - **回應狀態暫存（history）**：每個 request 保留最近 N 筆回應（預設 20，可調），存於資料夾內、跨裝置同步、重開 VSCode 仍在。
 - **匯入**：OpenAPI 3.x、剪貼簿 curl 指令、Insomnia v5 YAML / v4 JSON 匯出檔；也可輸入網址直接下載匯入（自動辨識格式）。
 - **匯出**：乾淨 OpenAPI（去除擴充欄位）、request 複製為 curl、Insomnia v5 YAML（通過該格式的官方 JSON Schema 驗證）。

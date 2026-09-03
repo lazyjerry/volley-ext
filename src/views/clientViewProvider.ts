@@ -271,6 +271,10 @@ export class ClientViewProvider implements vscode.WebviewViewProvider, vscode.Di
         this.post({ type: 'curlExported', requestId: request.id, text });
         break;
       }
+      case 'copyText':
+        await vscode.env.clipboard.writeText(message.text);
+        this.notice('info', `已複製${message.label}到剪貼簿`);
+        break;
       case 'runCommand':
         await vscode.commands.executeCommand(`volley.${message.command}`);
         break;

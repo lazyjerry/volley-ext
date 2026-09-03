@@ -49,7 +49,6 @@ function previewTab(record: ResponseRecord): HTMLElement {
   }
   const modeBtn = el('button', {
     class: 'secondary',
-    style: 'margin-bottom:6px',
     onclick: () => {
       state.responseViewMode = state.responseViewMode === 'pretty' ? 'raw' : 'pretty';
       render();
@@ -70,7 +69,12 @@ function previewTab(record: ResponseRecord): HTMLElement {
   if (record.bodyTruncated && !state.fullBodyByResponseId.has(record.id)) {
     box.append(el('div', { class: 'console-line warn' }, `body 已截斷保存（原始大小 ${formatSize(record.bodySize)}）`));
   }
-  box.append(modeBtn, el('pre', { class: 'resp-body' }, display));
+  const copyBtn = el('button', {
+    class: 'secondary',
+    title: '複製目前顯示的回應內容',
+    onclick: () => post({ type: 'copyText', text: display, label: '回應內容' }),
+  }, '複製');
+  box.append(el('div', { class: 'resp-toolbar' }, modeBtn, copyBtn), el('pre', { class: 'resp-body' }, display));
   return box;
 }
 

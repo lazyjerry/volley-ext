@@ -414,11 +414,12 @@ function bodyTab(request: RequestItem): HTMLElement {
   const mime = request.body.mimeType ?? '';
   // 美化按鈕要能拿到稍後才建立的 textarea，靠這個變數在 click 當下取值
   let field: HTMLElement | null = null;
-  const toolbar = el('div', { class: 'body-toolbar' }, select);
+  const actions = el('div', { class: 'toolbar-actions' });
+  const toolbar = el('div', { class: 'body-toolbar' }, select, actions);
   const isForm = mime === 'application/x-www-form-urlencoded' || mime === 'multipart/form-data';
   const formatter = TEXT_FORMATTERS[mime];
   if (isForm || formatter) {
-    toolbar.append(
+    actions.append(
       el('button', {
         class: 'secondary',
         title: isForm ? '依欄位名稱排序' : '重新排版（內容需合法）',
@@ -442,6 +443,19 @@ function bodyTab(request: RequestItem): HTMLElement {
           }
         },
       }, '美化'),
+    );
+  }
+  const isText = !isForm && mime !== '' && mime !== 'application/octet-stream';
+  if (isText) {
+    actions.append(
+      el('button', {
+        class: 'secondary',
+        title: '複製 body 原文（變數不展開）',
+        onclick: () => {
+          const text = field?.querySelector('textarea')?.value ?? request.body.text ?? '';
+          post({ type: 'copyText', text, label: 'request body' });
+        },
+      }, '複製'),
     );
   }
   box.append(toolbar);
