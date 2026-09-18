@@ -31,7 +31,8 @@ export function exportCurl(request: RequestItem, env: Record<string, unknown> = 
     if (request.method === 'HEAD') {
       parts.push('-I');
     } else if (request.method !== 'GET') {
-      parts.push(`-X ${request.method}`);
+      // method 來自匯入檔，未加引號會讓貼上執行的使用者跑到夾帶的 shell 指令
+      parts.push(`-X ${shellQuote(request.method)}`);
     }
   }
   parts.push(shellQuote(url));

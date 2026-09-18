@@ -12,6 +12,8 @@ export interface BuiltRequest {
   bodyFile?: string;
   formParams?: Array<{ name: string; value: string; type?: string; fileName?: string }>;
   mimeType?: string | null;
+  /** apikey auth 放在 header 時的 header 名稱：跨 origin 轉址要移除、寫入歷史要遮罩。 */
+  apiKeyHeader?: string;
   warnings: string[];
 }
 
@@ -55,6 +57,7 @@ export function buildRequest(
   }
 
   const headers: Array<[string, string]> = [];
+  let apiKeyHeader: string | undefined;
   // 資料夾層級 headers（由外而內），後者可被 request 自身覆蓋
   for (const folder of folderChain) {
     for (const h of folder.headers ?? []) {
@@ -85,6 +88,7 @@ export function buildRequest(
         url += (url.includes('?') ? '&' : '?') + `${encodeURIComponent(key)}=${encodeURIComponent(value)}`;
       } else if (key) {
         headers.push([key, value]);
+        apiKeyHeader = key;
       }
     } else if (UNSUPPORTED_AUTH_EXEC.has(String(authType))) {
       warnings.push(`auth 類型「${String(authType)}」尚未支援執行，本次未附加認證`);
@@ -96,6 +100,7 @@ export function buildRequest(
     method: request.method,
     headers,
     mimeType: request.body.mimeType ?? null,
+    ...(apiKeyHeader ? { apiKeyHeader } : {}),
     warnings,
   };
 
@@ -109,7 +114,8 @@ export function buildRequest(
     built.formParams = body.params
       .filter((p) => !p.disabled)
       .map((p) => ({ name: r(p.name), value: r(p.value), type: p.type, fileName: p.fileName }));
-  } else if (body.fileName) {
+  } else if (body.mimeType === 'application/octet-stream' && body.fileName) {
+    // 只有 Binary File 模式的介面會顯示檔案路徑；其他模式夾帶 fileName（如匯入檔）會在使用者看不到的情況下上傳本機檔案
     built.bodyFile = body.fileName;
   } else if (body.text !== undefined && body.text !== '') {
     built.bodyText = request.settings.renderRequestBody ? r(body.text) : body.text;

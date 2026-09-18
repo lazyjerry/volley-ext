@@ -309,13 +309,15 @@ interface KvRow {
   name: string;
   value: string;
   disabled?: boolean;
+  type?: string;
+  fileName?: string;
 }
 
 function kvTable<T extends KvRow>(
   rows: T[],
   makeRow: () => T,
   onChange: () => void,
-  options: { valuePlaceholder?: string } = {},
+  options: { valuePlaceholder?: string; showFileFields?: boolean } = {},
 ): HTMLElement {
   const box = el('div', { class: 'kv-table' });
   const renderRows = (): void => {
@@ -338,10 +340,19 @@ function kvTable<T extends KvRow>(
           row.name = v;
           onChange();
         }, { class: 'k', placeholder: 'name' }),
-        varInput(row.value, (v) => {
-          row.value = v;
-          onChange();
-        }, { class: 'v', placeholder: options.valuePlaceholder ?? 'value' }),
+        // 條件與 buildRequest 送出檔案的判斷一致：送出時會上傳的本機檔案一定要讓使用者看得到
+        options.showFileFields && row.type === 'file' && row.fileName
+          ? el('input', {
+              type: 'text',
+              class: 'v file-path',
+              value: row.fileName,
+              readonly: 'readonly',
+              title: `檔案欄位（唯讀）：送出時會上傳本機檔案 ${row.fileName}`,
+            })
+          : varInput(row.value, (v) => {
+              row.value = v;
+              onChange();
+            }, { class: 'v', placeholder: options.valuePlaceholder ?? 'value' }),
         el('button', {
           class: 'icon',
           title: '刪除',
@@ -462,9 +473,11 @@ function bodyTab(request: RequestItem): HTMLElement {
 
   if (isForm) {
     request.body.params = request.body.params ?? [];
-    box.append(kvTable<BodyParam>(request.body.params, () => ({ name: '', value: '' }), touch));
+    box.append(kvTable<BodyParam>(request.body.params, () => ({ name: '', value: '' }), touch, {
+      showFileFields: mime === 'multipart/form-data',
+    }));
     if (mime === 'multipart/form-data') {
-      box.append(el('div', { class: 'hint' }, '檔案欄位：value 留空並於匯出的 YAML 設 type: file 與 fileName（v1 UI 僅支援文字欄位）'));
+      box.append(el('div', { class: 'hint' }, '檔案欄位以唯讀方式顯示本機檔案路徑，送出時會上傳該檔案；新增或修改檔案欄位需在 YAML 設 type: file 與 fileName（v1 UI 僅支援編輯文字欄位）'));
     }
   } else if (mime === 'application/octet-stream') {
     box.append(

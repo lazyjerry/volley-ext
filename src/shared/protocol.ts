@@ -72,21 +72,43 @@ export type ClientMessage =
   | { type: 'importCurlText'; collectionId: string; folderId: string | null; text: string }
   | { type: 'exportCurl'; collectionId: string; requestId: string; copyToClipboard: boolean }
   | { type: 'copyText'; text: string; label: string }
-  | {
-      type: 'runCommand';
-      command:
-        | 'importInsomnia'
-        | 'importOpenApi'
-        | 'importCurl'
-        | 'importFromUrl'
-        | 'exportInsomniaYaml'
-        | 'exportOpenApi'
-        | 'newCollection'
-        | 'reload';
-    };
+  | { type: 'runCommand'; command: RunCommand };
+
+/** webview 可觸發的 volley.* 指令白名單；host 端組 `volley.${command}` 執行，不在清單內的一律拒收。 */
+export const RUN_COMMANDS = [
+  'importInsomnia',
+  'importOpenApi',
+  'importCurl',
+  'importFromUrl',
+  'exportInsomniaYaml',
+  'exportOpenApi',
+  'newCollection',
+  'reload',
+] as const;
+
+export type RunCommand = (typeof RUN_COMMANDS)[number];
 
 export function isClientMessage(value: unknown): value is ClientMessage {
-  return typeof value === 'object' && value !== null && typeof (value as { type?: unknown }).type === 'string';
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+  const m = value as Record<string, unknown>;
+  if (typeof m.type !== 'string') {
+    return false;
+  }
+  // id 會用來組檔案路徑與查找資料，非字串（物件、陣列）直接拒收
+  for (const field of ['collectionId', 'requestId'] as const) {
+    if (field in m && typeof m[field] !== 'string') {
+      return false;
+    }
+  }
+  if ('folderId' in m && m.folderId !== null && typeof m.folderId !== 'string') {
+    return false;
+  }
+  if (m.type === 'runCommand') {
+    return (RUN_COMMANDS as readonly unknown[]).includes(m.command);
+  }
+  return true;
 }
 
 export function isHostMessage(value: unknown): value is HostMessage {

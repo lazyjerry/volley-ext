@@ -25,3 +25,17 @@ export type IdPrefix = 'wrk' | 'fld' | 'req' | 'env' | 'jar';
 export function genId(prefix: IdPrefix): string {
   return `${prefix}_${randomHex(32)}`;
 }
+
+/**
+ * collection／request id 會直接成為 state 檔名或目錄名，
+ * 必須是單一路徑片段：非空、不是 . 或 ..、不含 / \ 與 NUL。
+ * 不限定 genId 格式：既有資料與 Insomnia 匯入的 id 形式不一。
+ */
+export function isSafeIdSegment(id: unknown): id is string {
+  return typeof id === 'string' && id !== '' && id !== '.' && id !== '..' && !/[/\\\0]/.test(id);
+}
+
+/** 匯入／解析用：id 不安全就重新產生。 */
+export function safeIdOr(id: unknown, prefix: IdPrefix): string {
+  return isSafeIdSegment(id) ? id : genId(prefix);
+}

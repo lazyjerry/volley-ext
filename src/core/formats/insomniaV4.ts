@@ -13,7 +13,7 @@ import type {
   TreeNode,
 } from '../model/types';
 import { defaultSettings, isFolder, normalizeSortKeys } from '../model/types';
-import { genId } from '../model/ids';
+import { genId, safeIdOr } from '../model/ids';
 
 interface V4Resource {
   _id: string;
@@ -50,7 +50,8 @@ function toRequest(res: V4Resource, fallbackSort: number): RequestItem {
   const d = defaultSettings();
   const request: RequestItem = {
     kind: 'request',
-    id: res._id || genId('req'),
+    // nodeById／parentId 仍以原始 _id 串接；只有落進模型的 id 需要是安全路徑片段
+    id: safeIdOr(res._id, 'req'),
     name: String(res.name ?? ''),
     sortKey: res.metaSortKey ?? fallbackSort,
     method: String(res.method ?? 'GET').toUpperCase(),
@@ -174,7 +175,7 @@ export function importInsomniaV4(text: string): Collection {
   const jarRes = resources.find((r) => r._type === 'cookie_jar');
   const now = Date.now();
   return {
-    id: workspaceId ?? genId('wrk'),
+    id: safeIdOr(workspaceId, 'wrk'),
     name: String(workspace?.name ?? 'Imported Collection'),
     ...(workspace?.description ? { description: String(workspace.description) } : {}),
     created: (workspace?.created as number | undefined) ?? now,

@@ -55,7 +55,12 @@ export function parseSetCookie(header: string, requestUrl: URL): CookieRecord | 
     switch (name) {
       case 'domain':
         if (value) {
-          cookie.domain = value.replace(/^\./, '');
+          const domain = value.replace(/^\./, '');
+          // RFC 6265 5.3 步驟 6：Domain 必須涵蓋請求主機，否則任一網站都能替別的網域種 cookie（cookie tossing）
+          if (!domainMatches(domain, requestUrl.hostname, false)) {
+            return null;
+          }
+          cookie.domain = domain;
           cookie.hostOnly = false;
         }
         break;

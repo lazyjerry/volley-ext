@@ -14,7 +14,7 @@ import type {
   TreeNode,
 } from '../model/types';
 import { defaultSettings, isFolder, normalizeSortKeys } from '../model/types';
-import { genId } from '../model/ids';
+import { genId, safeIdOr } from '../model/ids';
 
 export const V5_COLLECTION_TYPE = 'collection.insomnia.rest/5.0';
 export const V5_SCHEMA_VERSION = '5.1';
@@ -206,10 +206,11 @@ function v5ToNode(raw: Record<string, unknown>, fallbackSort: number): TreeNode 
   if (raw.method === undefined) {
     return null; // gRPC/WebSocket 等目前不支援的類型：跳過
   }
-  const id = meta.id || genId('req');
-  if (id.startsWith('ws-req') || id.startsWith('socketio-req')) {
+  if (meta.id.startsWith('ws-req') || meta.id.startsWith('socketio-req')) {
     return null;
   }
+  // request id 會成為回應歷史的檔名
+  const id = safeIdOr(meta.id, 'req');
   const request: RequestItem = {
     kind: 'request',
     id,
@@ -283,7 +284,7 @@ export function importInsomniaV5(text: string): Collection {
   const jarMeta = metaOf(rawJar);
   const now = Date.now();
   return {
-    id: meta.id || genId('wrk'),
+    id: safeIdOr(meta.id, 'wrk'),
     name: String(doc.name ?? 'Imported Collection'),
     ...(meta.description ? { description: meta.description } : {}),
     created: meta.created ?? now,

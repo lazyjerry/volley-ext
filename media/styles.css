@@ -737,6 +737,16 @@ body.vscode-light .subtab-badge {
   opacity: 0.5;
 }
 
+.kv-row input.file-path {
+  flex: 1 1 auto;
+  min-width: 60px;
+  font-style: italic;
+}
+
+.kv-row.disabled input.file-path {
+  opacity: 0.5;
+}
+
 .body-editor {
   display: flex;
   flex-direction: column;

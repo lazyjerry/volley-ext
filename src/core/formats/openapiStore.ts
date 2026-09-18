@@ -18,6 +18,7 @@ import type {
   TreeNode,
 } from '../model/types';
 import { defaultSettings, isFolder, walkRequests } from '../model/types';
+import { safeIdOr } from '../model/ids';
 import { basePrefixCandidates, projectUrl } from './urlPath';
 import { importOpenApi } from './openapiImport';
 
@@ -194,7 +195,8 @@ function toRequestItem(
 ): { request: RequestItem; folderId: string | null } {
   const request = stripUndefined({
     kind: 'request',
-    id,
+    // 匯入檔可自訂 operationId；不安全的 id 會在 state 目錄組出越界路徑
+    id: safeIdOr(id, 'req'),
     name,
     description,
     sortKey: extra.sortKey ?? 0,
@@ -308,7 +310,8 @@ export function parseCollection(text: string): Collection {
   }) as Collection['cookieJar'];
 
   return stripUndefined({
-    id: String(meta.id ?? ''),
+    // 缺 id 時舊版給空字串，刪除 collection 會連帶清掉整個 responses 目錄
+    id: safeIdOr(String(meta.id ?? ''), 'wrk'),
     name: String(info.title ?? ''),
     description: info.description !== undefined ? String(info.description) : undefined,
     created: Number(meta.created ?? Date.now()),

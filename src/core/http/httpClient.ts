@@ -22,6 +22,30 @@ export interface SendResult {
 
 const TEXTUAL_RE = /^(text\/|application\/(json|xml|yaml|javascript|x-www-form-urlencoded|graphql))/i;
 
+const CREDENTIAL_HEADERS = ['authorization', 'proxy-authorization', 'cookie'];
+
+/** 帶憑證的 header 名稱（小寫）：固定三個 + apikey auth 設定的 header。 */
+export function credentialHeaderNames(built: BuiltRequest): Set<string> {
+  const names = new Set(CREDENTIAL_HEADERS);
+  if (built.apiKeyHeader) {
+    names.add(built.apiKeyHeader.toLowerCase());
+  }
+  return names;
+}
+
+export const MASKED_HEADER_VALUE = '***';
+
+/** 回應歷史會落檔（且可能同步到雲端），憑證 header 只留名稱。 */
+export function maskCredentialHeaders(
+  headers: Array<[string, string]>,
+  sensitive: Set<string>,
+): Array<{ name: string; value: string }> {
+  return headers.map(([name, value]) => ({
+    name,
+    value: sensitive.has(name.toLowerCase()) ? MASKED_HEADER_VALUE : value,
+  }));
+}
+
 function shouldFollow(request: RequestItem, options: HttpClientOptions): boolean {
   const setting = request.settings.followRedirects;
   if (setting === 'on') {
@@ -43,7 +67,10 @@ export async function sendRequest(
   const start = performance.now();
   const redirectChain: string[] = [];
   const warnings = [...built.warnings];
-  const requestHeaders = built.headers.map(([name, value]) => ({ name, value }));
+  const credentialHeaders = credentialHeaderNames(built);
+  const requestHeaders = maskCredentialHeaders(built.headers, credentialHeaders);
+  // 在迴圈內第一跳才取，URL 不合法時才會落到下方 catch 產生 error record
+  let originalOrigin: string | undefined;
 
   const signals: AbortSignal[] = [AbortSignal.timeout(options.timeoutMs)];
   if (externalSignal) {
@@ -84,8 +111,14 @@ export async function sendRequest(
   try {
     for (;;) {
       const url = new URL(currentUrl);
+      originalOrigin ??= url.origin;
+      // 轉址到其他 origin 時不帶憑證，避免把 token 交給第三方；jar 的 cookie 下面依目標網域重算
+      const crossOrigin = url.origin !== originalOrigin;
       const headers = new Headers();
       for (const [name, value] of built.headers) {
+        if (crossOrigin && credentialHeaders.has(name.toLowerCase())) {
+          continue;
+        }
         headers.append(name, value);
       }
       if (request.settings.cookies.send) {

@@ -117,7 +117,9 @@ export function importCurl(command: string): RequestItem {
   while (i < tokens.length) {
     const tok = tokens[i];
     if (tok === '-X' || tok === '--request') {
-      method = next().toUpperCase();
+      const raw = next();
+      // 非純英文字母的 method 捨棄，交給下方依 data 推斷（GET／POST）
+      method = /^[A-Za-z]+$/.test(raw) ? raw.toUpperCase() : '';
     } else if (tok === '-H' || tok === '--header') {
       const raw = next();
       const idx = raw.indexOf(':');
