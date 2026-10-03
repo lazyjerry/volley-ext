@@ -5,6 +5,7 @@ import type {
   Collection,
   CollectionSource,
   CollectionSummary,
+  GlobalEnvironment,
   RequestItem,
   ResponseRecord,
   UiState,
@@ -31,8 +32,11 @@ export type HostMessage =
       uiState: UiState | null;
       config: ClientConfig;
       conflictedCopies: string[];
+      /** 作用中 collection 所屬資料根的共用環境；沒有作用中 collection 時為 null */
+      globalEnvironment: GlobalEnvironment | null;
     }
-  | { type: 'collectionLoaded'; collection: Collection; uiState: UiState }
+  | { type: 'collectionLoaded'; collection: Collection; uiState: UiState; globalEnvironment: GlobalEnvironment }
+  | { type: 'globalEnvironmentChangedOnDisk'; environment: GlobalEnvironment }
   | { type: 'collectionChangedOnDisk'; collection: Collection }
   | { type: 'collectionListChanged'; collections: CollectionSummary[] }
   | { type: 'responseStarted'; requestId: string }
@@ -48,8 +52,7 @@ export type HostMessage =
   | { type: 'requestInserted'; request: RequestItem; folderId: string | null }
   | { type: 'curlExported'; requestId: string; text: string }
   | { type: 'folderDeleteConfirmed'; folderId: string; mode: 'all' | 'folderOnly' }
-  | { type: 'envVarDeleteConfirmed'; key: string }
-  | { type: 'notice'; level: 'info' | 'warn' | 'error'; message: string };
+  | { type: 'envVarDeleteConfirmed'; key: string };
 
 // Webview → Extension
 export type ClientMessage =
@@ -64,6 +67,8 @@ export type ClientMessage =
   | { type: 'confirmDeleteEnvVar'; key: string }
   | { type: 'showNotice'; level: 'info' | 'warn' | 'error'; message: string }
   | { type: 'updateCollection'; collection: Collection }
+  /** 依 collectionId 的歸屬寫回該資料根的共用環境 */
+  | { type: 'updateGlobalEnvironment'; collectionId: string; environment: GlobalEnvironment }
   | { type: 'sendRequest'; collectionId: string; requestId: string }
   | { type: 'cancelRequest'; requestId: string }
   | { type: 'loadHistory'; collectionId: string; requestId: string }
@@ -104,6 +109,12 @@ export function isClientMessage(value: unknown): value is ClientMessage {
   }
   if ('folderId' in m && m.folderId !== null && typeof m.folderId !== 'string') {
     return false;
+  }
+  if (m.type === 'updateGlobalEnvironment') {
+    const env = m.environment as Record<string, unknown> | null;
+    if (typeof env !== 'object' || env === null || typeof env.data !== 'object' || env.data === null || Array.isArray(env.data)) {
+      return false;
+    }
   }
   if (m.type === 'runCommand') {
     return (RUN_COMMANDS as readonly unknown[]).includes(m.command);

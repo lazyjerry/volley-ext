@@ -2,7 +2,7 @@
   "name": "volley",
   "displayName": "Volley",
   "description": "VSCode 內的 REST client：資料以標準 OpenAPI 3.1 YAML 保存於可同步資料夾，支援 OpenAPI、curl 與 Insomnia v5/v4 格式匯入匯出",
-  "version": "0.5.8",
+  "version": "0.6.2",
   "publisher": "workjerry",
   "license": "Apache-2.0",
   "engines": {
@@ -128,7 +128,7 @@
         },
         "volley.responseHistoryLimit": {
           "type": "number",
-          "default": 20,
+          "default": 3,
           "description": "每個 request 保留的回應歷史筆數"
         },
         "volley.maxStoredBodyBytes": {

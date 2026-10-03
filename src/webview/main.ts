@@ -3,20 +3,20 @@
 import type { FindKey } from './store';
 import type { HostMessage } from '../shared/protocol';
 import { isHostMessage } from '../shared/protocol';
-import { emptyUiState } from '../core/model/types';
+import { emptyGlobalEnvironment, emptyUiState } from '../core/model/types';
 import {
   editableField,
   el,
   flushPendingEdits,
   getEditRevision,
   hasPendingEdits,
+  hasPendingGlobalEnvEdits,
   insertNode,
   isEditing,
   notice,
   post,
   render,
   selectedRequest,
-  setNoticeRenderFn,
   setRenderFn,
   state,
   touch,
@@ -100,6 +100,7 @@ function deferKey(message: HostMessage): string | null {
   switch (message.type) {
     case 'collectionChangedOnDisk':
     case 'collectionListChanged':
+    case 'globalEnvironmentChangedOnDisk':
       return message.type;
     case 'historyLoaded':
       return `historyLoaded:${message.requestId}`;
@@ -118,6 +119,10 @@ function applyDeferred(): void {
     // 擱置期間又編輯過 → 本地優先，丟掉磁碟版本（last-writer-wins）
     if (message.type === 'collectionChangedOnDisk'
       && (hasPendingEdits() || getEditRevision() !== revision)) {
+      continue;
+    }
+    if (message.type === 'globalEnvironmentChangedOnDisk'
+      && (hasPendingGlobalEnvEdits() || getEditRevision() !== revision)) {
       continue;
     }
     handleHostMessage(message);
@@ -166,12 +171,6 @@ function renderNotices(): void {
   for (const file of state.conflictedCopies) {
     bar.append(el('div', { class: 'notice warn' }, `偵測到 Dropbox 衝突副本：${file}（請手動整併）`));
   }
-  if (state.notice) {
-    const current = state.notice;
-    bar.append(
-      el('div', { class: `notice ${current.level}`, onclick: () => { state.notice = null; render(); }, title: '點擊關閉' }, current.message),
-    );
-  }
 }
 
 function fullRender(): void {
@@ -208,6 +207,7 @@ function handleHostMessage(message: HostMessage): void {
       state.ui = message.uiState ?? emptyUiState();
       state.config = message.config;
       state.conflictedCopies = message.conflictedCopies;
+      state.globalEnv = message.globalEnvironment ?? emptyGlobalEnvironment();
       state.historyByRequest.clear();
       if (state.ui.selectedRequestId && state.collection) {
         post({ type: 'loadHistory', collectionId: state.collection.id, requestId: state.ui.selectedRequestId });
@@ -218,6 +218,7 @@ function handleHostMessage(message: HostMessage): void {
     case 'collectionLoaded':
       state.collection = message.collection;
       state.ui = message.uiState;
+      state.globalEnv = message.globalEnvironment;
       state.historyByRequest.clear();
       state.envEditor = null;
       if (state.ui.selectedRequestId) {
@@ -236,6 +237,13 @@ function handleHostMessage(message: HostMessage): void {
     case 'collectionListChanged':
       state.collections = message.collections;
       render();
+      break;
+    case 'globalEnvironmentChangedOnDisk':
+      if (!hasPendingGlobalEnvEdits()) {
+        state.globalEnv = message.environment;
+        notice('info', '已從磁碟載入共用環境的外部變更');
+        render();
+      }
       break;
     case 'responseStarted':
       state.sending.add(message.requestId);
@@ -280,9 +288,6 @@ function handleHostMessage(message: HostMessage): void {
       break;
     case 'curlExported':
       // 已由 extension 端複製到剪貼簿；此處僅提示
-      break;
-    case 'notice':
-      notice(message.level, message.message);
       break;
   }
 }
@@ -350,7 +355,6 @@ function initFind(): void {
 function boot(): void {
   buildSkeleton();
   setRenderFn(fullRender);
-  setNoticeRenderFn(renderNotices);
   initLayout();
   initSplitters();
   initAutosaveFeedback();

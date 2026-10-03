@@ -141,6 +141,8 @@ export interface FindBarOptions {
   onQueryChange?: () => void;
   /** 關閉搜尋列後重繪面板。 */
   onClose: () => void;
+  /** 固定顯示：不看 findState.open、沒有關閉鈕，Esc 改為清空查詢字串。 */
+  persistent?: boolean;
 }
 
 export interface FindBarHandle {
@@ -149,10 +151,10 @@ export interface FindBarHandle {
   refresh: (reveal?: boolean) => void;
 }
 
-/** findState.open 為 false 時回傳 null。 */
+/** findState.open 為 false 且不是固定顯示時回傳 null。 */
 export function createFindBar(options: FindBarOptions): FindBarHandle | null {
   const findState = options.findState;
-  if (!findState.open) {
+  if (!findState.open && !options.persistent) {
     return null;
   }
   // type=search：讓 store 的 editableField() 不把搜尋框當成模型欄位（不觸發自動保存與訊息延後）
@@ -162,7 +164,7 @@ export function createFindBar(options: FindBarOptions): FindBarHandle | null {
     value: findState.query,
     spellcheck: false,
     placeholder: options.placeholder ?? '搜尋內容…',
-    title: 'Enter 下一個、Shift+Enter 上一個、Esc 關閉',
+    title: `Enter 下一個、Shift+Enter 上一個、Esc ${options.persistent ? '清空' : '關閉'}`,
   });
   const counter = el('span', { class: 'find-count' });
   const bar = el('div', { class: 'find-bar' });
@@ -220,6 +222,13 @@ export function createFindBar(options: FindBarOptions): FindBarHandle | null {
     if (ev.key === 'Enter') {
       ev.preventDefault();
       step(ev.shiftKey ? -1 : 1);
+    } else if (ev.key === 'Escape' && options.persistent) {
+      ev.preventDefault();
+      input.value = '';
+      findState.query = '';
+      findState.index = 0;
+      syncCaret();
+      refresh();
     } else if (ev.key === 'Escape') {
       ev.preventDefault();
       close();
@@ -247,7 +256,7 @@ export function createFindBar(options: FindBarOptions): FindBarHandle | null {
     counter,
     el('button', { class: 'icon', title: '上一個（Shift+Enter）', onmousedown: keepFocus, onclick: () => step(-1) }, '↑'),
     el('button', { class: 'icon', title: '下一個（Enter）', onmousedown: keepFocus, onclick: () => step(1) }, '↓'),
-    el('button', { class: 'icon', title: '關閉（Esc）', onclick: close }, '✕'),
+    ...(options.persistent ? [] : [el('button', { class: 'icon', title: '關閉（Esc）', onclick: close }, '✕')]),
   );
 
   // 面板重繪會把搜尋框整個換掉（移除中的元素不發 blur），focused 記錄的是重繪前的狀態

@@ -37,7 +37,7 @@ suite('extension activation', () => {
     assert.strictEqual(config.get('dataFolder'), '');
     assert.strictEqual(config.get('privateDataFolder'), '');
     assert.strictEqual(config.get('requestTimeoutMs'), 30000);
-    assert.strictEqual(config.get('responseHistoryLimit'), 20);
+    assert.strictEqual(config.get('responseHistoryLimit'), 3);
   });
 
   test('open 指令可執行（view focus）', async () => {

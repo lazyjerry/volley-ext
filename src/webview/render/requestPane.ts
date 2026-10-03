@@ -3,7 +3,7 @@
 
 import type { BodyParam, Header, QueryParam, RequestItem } from '../../core/model/types';
 import { walkRequests } from '../../core/model/types';
-import { containsTemplate, interpolate, parseVarPath } from '../../core/vars/template';
+import { containsTemplate, interpolate, parseVarPath, tokenOrigin } from '../../core/vars/template';
 import { resolveEnvironment } from '../../core/vars/environment';
 import { prettyJson, prettyXml, prettyYaml } from '../../core/formats/prettyPrint';
 import { el, notice, post, render, selectedRequest, state, touch } from '../store';
@@ -41,7 +41,8 @@ const MIME_OPTIONS: Array<[string, string]> = [
   ['application/octet-stream', 'Binary File'],
 ];
 
-export function currentEnv(): Record<string, unknown> {
+/** 生效環境；withGlobal = false 時不疊共用環境，用來判斷變數是不是只來自共用環境。 */
+export function currentEnv(withGlobal = true): Record<string, unknown> {
   const collection = state.collection;
   if (!collection) {
     return {};
@@ -50,7 +51,7 @@ export function currentEnv(): Record<string, unknown> {
   const chain = id
     ? (walkRequests(collection.children).find((e) => e.request.id === id)?.folderChain ?? [])
     : [];
-  return resolveEnvironment(collection, state.ui.activeEnvironmentId, chain);
+  return resolveEnvironment(collection, state.ui.activeEnvironmentId, chain, withGlobal ? state.globalEnv.data : {});
 }
 
 /** 帶變數標示與解析預覽的 input。 */
@@ -131,16 +132,18 @@ function varField(
       return;
     }
     const collapsed = collapsible && !focused && !hovered;
+    const merged = currentEnv();
+    const local = currentEnv(false);
     let offset = 0;
     for (const match of input.value.matchAll(VAR_TOKEN_RE)) {
       const start = match.index ?? 0;
       if (start > offset) {
         overlay.append(document.createTextNode(input.value.slice(offset, start)));
       }
-      const missing = interpolate(match[0], currentEnv()).missing.length > 0;
+      const origin = tokenOrigin(match[0], merged, local);
       overlay.append(el(
         'span',
-        { class: `template-token${missing ? ' missing' : ''}${collapsed ? ' collapsed' : ''}` },
+        { class: `template-token${origin === 'local' ? '' : ` ${origin}`}${collapsed ? ' collapsed' : ''}` },
         collapsed ? tokenLabel(match[0]) : match[0],
       ));
       offset = start + match[0].length;
@@ -201,10 +204,14 @@ function varField(
     const has = containsTemplate(input.value);
     wrapper.classList.toggle('has-var', has);
     if (has) {
-      const { missing } = interpolate(input.value, currentEnv());
+      const merged = currentEnv();
+      const local = currentEnv(false);
+      const origins = [...input.value.matchAll(VAR_TOKEN_RE)].map((m) => tokenOrigin(m[0], merged, local));
+      const { missing } = interpolate(input.value, merged);
       wrapper.classList.toggle('has-missing-var', missing.length > 0);
+      wrapper.classList.toggle('has-global-var', origins.includes('global'));
     } else {
-      wrapper.classList.remove('has-missing-var');
+      wrapper.classList.remove('has-missing-var', 'has-global-var');
     }
     paint();
   };

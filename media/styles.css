@@ -190,6 +190,31 @@ textarea {
   text-decoration: underline wavy var(--warn);
 }
 
+/* 只靠共用環境才解析得到的變數：框線換青綠色，與 collection 自己環境的品牌綠區分；未定義的警告色仍優先 */
+:root {
+  --acc-global: #4ec9b0;
+}
+
+body.vscode-light {
+  --acc-global: #0f7b6c;
+}
+
+.template-field.has-global-var:not(.has-missing-var) {
+  border-bottom-color: var(--acc-global);
+}
+
+.template-token.global {
+  box-shadow: inset 0 0 0 1px var(--acc-global);
+}
+
+.env-dot.global {
+  background: var(--acc-global);
+}
+
+.env-item.global {
+  border-bottom: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.2));
+}
+
 .var-suggestions {
   display: none;
   position: absolute;
@@ -239,9 +264,7 @@ textarea {
   border-bottom: 1px solid var(--vscode-widget-border, transparent);
 }
 
-.notice.info { color: var(--vscode-foreground); }
 .notice.warn { color: var(--warn); }
-.notice.error { color: var(--danger); }
 
 #autosave-toast {
   position: fixed;
@@ -767,12 +790,6 @@ body.vscode-light .subtab-badge {
   gap: 6px;
 }
 
-.resp-toolbar {
-  display: flex;
-  gap: 6px;
-  margin-bottom: 6px;
-}
-
 .body-editor > .template-field.multiline {
   flex: 1 1 auto;
   min-height: 120px;
@@ -847,15 +864,37 @@ body.vscode-light .subtab-badge {
   font-size: 0.9em;
 }
 
-.resp-history {
+/* 檢視下拉靠右，與狀態同列 */
+.resp-status > select {
   margin-left: auto;
-  display: flex;
-  gap: 4px;
-  align-items: center;
 }
 
-.resp-history select {
-  max-width: 220px;
+/* 動作列：歷史下拉可縮、按鈕不縮，窄面板時縮的是下拉文字而不是把按鈕擠出去 */
+.resp-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.2));
+}
+
+.resp-actions > select {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 260px;
+  text-overflow: ellipsis;
+}
+
+.resp-actions > button {
+  flex: 0 0 auto;
+}
+
+.resp-view-actions {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 2px;
+  margin-left: auto;
+  padding-left: 12px;
 }
 
 pre.resp-body {

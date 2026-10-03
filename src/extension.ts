@@ -14,12 +14,14 @@ import type { CollectionSource } from './core/model/types';
 import { CollectionStore } from './storage/collectionStore';
 import { StateStore } from './storage/stateStore';
 import { DualCollectionStore, DualStateStore } from './storage/dualStore';
+import { GlobalEnvStore } from './storage/globalEnvStore';
 import { countCollectionFiles, expandHome, findConflictedCopies, resolveDataFolder } from './storage/dataFolder';
 import type { DataFolderLayout } from './storage/dataFolder';
 import { ClientViewProvider } from './views/clientViewProvider';
 
 let collectionStore: DualCollectionStore | undefined;
 let stateStore: DualStateStore | undefined;
+let globalEnvStores: Record<CollectionSource, GlobalEnvStore> | undefined;
 
 const SOURCE_LABELS: Record<CollectionSource, string> = { shared: '共用', private: '私人' };
 
@@ -84,6 +86,10 @@ export function activate(context: vscode.ExtensionContext): void {
       new StateStore(layouts.private.stateDir, layouts.private.responsesDir),
       (id) => dual.sourceOf(id),
     );
+    globalEnvStores = {
+      shared: new GlobalEnvStore(layouts.shared.root),
+      private: new GlobalEnvStore(layouts.private.root),
+    };
   };
   initStores();
 
@@ -93,6 +99,9 @@ export function activate(context: vscode.ExtensionContext): void {
     },
     get stateStore() {
       return stateStore!;
+    },
+    get globalEnvStores() {
+      return globalEnvStores!;
     },
     getDataFolderInfo: () => ({
       shared: { path: layouts.shared.root, isFallback: layouts.shared.isFallback },
@@ -157,6 +166,9 @@ export function activate(context: vscode.ExtensionContext): void {
 
   register('volley.reload', () => {
     collectionStore!.loadAll();
+    for (const store of Object.values(globalEnvStores!)) {
+      store.load();
+    }
     provider.sendInit();
     void vscode.window.setStatusBarMessage('Volley：已從磁碟重新載入', 3000);
   });

@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { Collection } from '../core/model/types';
+import type { Collection, CollectionSource } from '../core/model/types';
 import { findFolderChain, findRequest } from '../core/model/types';
 import { resolveEnvironment } from '../core/vars/environment';
 import { buildRequest } from '../core/http/buildRequest';
@@ -7,12 +7,14 @@ import { sendRequest } from '../core/http/httpClient';
 import { importCurl } from '../core/formats/curlImport';
 import { exportCurl } from '../core/formats/curlExport';
 import type { DualCollectionStore, DualStateStore } from '../storage/dualStore';
+import type { GlobalEnvStore } from '../storage/globalEnvStore';
 import type { ClientConfig, ClientMessage, DataFolderInfo, HostMessage } from '../shared/protocol';
 import { isClientMessage } from '../shared/protocol';
 
 export interface ProviderDeps {
   collectionStore: DualCollectionStore;
   stateStore: DualStateStore;
+  globalEnvStores: Record<CollectionSource, GlobalEnvStore>;
   getDataFolderInfo: () => { shared: DataFolderInfo; private: DataFolderInfo; conflictedCopies: string[] };
 }
 
@@ -45,7 +47,7 @@ export class ClientViewProvider implements vscode.WebviewViewProvider, vscode.Di
         this.post({ type: 'collectionListChanged', collections: store.list() });
       }),
       store.onError((message) => {
-        this.post({ type: 'notice', level: 'error', message });
+        this.notice('error', message);
       }),
     ];
   }
@@ -54,6 +56,21 @@ export class ClientViewProvider implements vscode.WebviewViewProvider, vscode.Di
     return this.activeCollectionId
       ? this.deps.collectionStore.get(this.activeCollectionId)
       : undefined;
+  }
+
+  /** collection 所屬資料根的共用環境；歸屬不明時視為共用資料夾（與 DualCollectionStore.update 一致）。 */
+  private globalEnvFor(collectionId: string): GlobalEnvStore {
+    return this.deps.globalEnvStores[this.deps.collectionStore.sourceOf(collectionId) ?? 'shared'];
+  }
+
+  /** 兩個資料根的共用環境都比對磁碟；作用中 collection 那一份有變才通知 webview。 */
+  checkGlobalEnvDisk(): void {
+    const active = this.activeCollectionId ? this.globalEnvFor(this.activeCollectionId) : undefined;
+    for (const store of Object.values(this.deps.globalEnvStores)) {
+      if (store.checkDisk() && store === active) {
+        this.post({ type: 'globalEnvironmentChangedOnDisk', environment: store.get() });
+      }
+    }
   }
 
   resolveWebviewView(webviewView: vscode.WebviewView): void {
@@ -72,6 +89,7 @@ export class ClientViewProvider implements vscode.WebviewViewProvider, vscode.Di
     webviewView.onDidChangeVisibility(() => {
       if (webviewView.visible) {
         this.deps.collectionStore.checkDisk();
+        this.checkGlobalEnvDisk();
       }
     });
     webviewView.onDidDispose(() => {
@@ -92,12 +110,20 @@ export class ClientViewProvider implements vscode.WebviewViewProvider, vscode.Di
         type: 'collectionLoaded',
         collection,
         uiState: this.deps.stateStore.loadUiState(collectionId),
+        globalEnvironment: this.globalEnvFor(collectionId).get(),
       });
     }
   }
 
+  /** VS Code 右下角 toast；不在 webview 內插通知列，避免面板版面晃動。 */
   notice(level: 'info' | 'warn' | 'error', message: string): void {
-    this.post({ type: 'notice', level, message });
+    if (level === 'error') {
+      void vscode.window.showErrorMessage(message);
+    } else if (level === 'warn') {
+      void vscode.window.showWarningMessage(message);
+    } else {
+      void vscode.window.showInformationMessage(message);
+    }
   }
 
   sendInit(): void {
@@ -105,7 +131,7 @@ export class ClientViewProvider implements vscode.WebviewViewProvider, vscode.Di
     const config: ClientConfig = {
       dataFolders: { shared: info.shared, private: info.private },
       requestTimeoutMs: this.getConfig<number>('requestTimeoutMs', 30000),
-      responseHistoryLimit: this.getConfig<number>('responseHistoryLimit', 20),
+      responseHistoryLimit: this.getConfig<number>('responseHistoryLimit', 3),
     };
     const collections = this.deps.collectionStore.list();
     if (!this.activeCollectionId && collections.length > 0) {
@@ -119,6 +145,7 @@ export class ClientViewProvider implements vscode.WebviewViewProvider, vscode.Di
       uiState: active ? this.deps.stateStore.loadUiState(active.id) : null,
       config,
       conflictedCopies: info.conflictedCopies,
+      globalEnvironment: active ? this.globalEnvFor(active.id).get() : null,
     });
   }
 
@@ -198,16 +225,9 @@ export class ClientViewProvider implements vscode.WebviewViewProvider, vscode.Di
         }
         break;
       }
-      case 'showNotice': {
-        if (message.level === 'error') {
-          void vscode.window.showErrorMessage(message.message);
-        } else if (message.level === 'warn') {
-          void vscode.window.showWarningMessage(message.message);
-        } else {
-          void vscode.window.showInformationMessage(message.message);
-        }
+      case 'showNotice':
+        this.notice(message.level, message.message);
         break;
-      }
       case 'deleteCollection': {
         const target = collectionStore.get(message.collectionId);
         const choice = await vscode.window.showWarningMessage(
@@ -227,6 +247,13 @@ export class ClientViewProvider implements vscode.WebviewViewProvider, vscode.Di
       }
       case 'updateCollection':
         collectionStore.update(message.collection);
+        break;
+      case 'updateGlobalEnvironment':
+        try {
+          this.globalEnvFor(message.collectionId).save(message.environment);
+        } catch (err) {
+          this.notice('error', `共用環境寫入失敗：${err instanceof Error ? err.message : String(err)}`);
+        }
         break;
       case 'updateUiState':
         stateStore.saveUiState(message.collectionId, message.state);
@@ -262,6 +289,7 @@ export class ClientViewProvider implements vscode.WebviewViewProvider, vscode.Di
           collection,
           uiState.activeEnvironmentId,
           findFolderChain(collection.children, request.id),
+          this.globalEnvFor(collection.id).get().data,
         );
         const text = exportCurl(request, env);
         if (message.copyToClipboard) {
@@ -304,7 +332,12 @@ export class ClientViewProvider implements vscode.WebviewViewProvider, vscode.Di
     try {
       const uiState = stateStore.loadUiState(collectionId);
       const folderChain = findFolderChain(collection.children, requestId);
-      const env = resolveEnvironment(collection, uiState.activeEnvironmentId, folderChain);
+      const env = resolveEnvironment(
+        collection,
+        uiState.activeEnvironmentId,
+        folderChain,
+        this.globalEnvFor(collectionId).get().data,
+      );
       const built = buildRequest(request, env, folderChain);
       const { record, fullBody } = await sendRequest(
         request,
@@ -325,7 +358,7 @@ export class ClientViewProvider implements vscode.WebviewViewProvider, vscode.Di
       const history = stateStore.appendResponse(
         collectionId,
         record,
-        this.getConfig<number>('responseHistoryLimit', 20),
+        this.getConfig<number>('responseHistoryLimit', 3),
       );
       // fullBody 供當次 Preview 顯示；過大時退回截斷版，避免 postMessage 拖垮 webview
       const MAX_PREVIEW_BYTES = 2 * 1024 * 1024;
@@ -359,7 +392,7 @@ export class ClientViewProvider implements vscode.WebviewViewProvider, vscode.Di
       const history = stateStore.appendResponse(
         collectionId,
         record,
-        this.getConfig<number>('responseHistoryLimit', 20),
+        this.getConfig<number>('responseHistoryLimit', 3),
       );
       this.post({
         type: 'responseFinished',

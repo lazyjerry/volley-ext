@@ -7,6 +7,7 @@ import { parseCollection, serializeCollection } from '../../src/core/formats/ope
 import { CollectionStore } from '../../src/storage/collectionStore';
 import { StateStore } from '../../src/storage/stateStore';
 import { collectionFileName, countCollectionFiles, resolveDataFolder, slugify } from '../../src/storage/dataFolder';
+import { GLOBAL_ENV_FILE, GlobalEnvStore, normalizeGlobalEnvironment } from '../../src/storage/globalEnvStore';
 import { sampleCollection } from './helpers';
 
 function tmpDir(): string {
@@ -228,6 +229,43 @@ suite('storage/stateStore', () => {
     assert.strictEqual(history[0].id, 'res_4', '最新在前');
     store.clearHistory('wrk_x', 'req_1');
     assert.strictEqual(store.loadHistory('wrk_x', 'req_1').length, 0);
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+});
+
+suite('storage/globalEnvStore', () => {
+  test('檔案不存在 → 空的共用環境；save 後重開讀得回來', () => {
+    const dir = tmpDir();
+    const store = new GlobalEnvStore(dir);
+    assert.deepStrictEqual(store.get(), { data: {} });
+    store.save({ data: { token: 'abc', n: 1 }, descriptions: { token: '登入用' } });
+    const reopened = new GlobalEnvStore(dir);
+    assert.deepStrictEqual(reopened.get(), { data: { token: 'abc', n: 1 }, descriptions: { token: '登入用' } });
+    assert.ok(!fs.existsSync(path.join(dir, `${GLOBAL_ENV_FILE}.tmp`)), 'tmp 檔已 rename 掉');
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  test('checkDisk：自己寫的不算變更，外部改檔才重新載入', async () => {
+    const dir = tmpDir();
+    const store = new GlobalEnvStore(dir);
+    store.save({ data: { a: 1 } });
+    assert.strictEqual(store.checkDisk(), false);
+    await wait(20);
+    fs.writeFileSync(path.join(dir, GLOBAL_ENV_FILE), JSON.stringify({ data: { a: 2 } }));
+    assert.strictEqual(store.checkDisk(), true);
+    assert.deepStrictEqual(store.get(), { data: { a: 2 } });
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  test('壞掉或形狀不對的內容不拋例外：JSON 錯 → 空；註解只留字串且對得到 key 的', () => {
+    const dir = tmpDir();
+    fs.writeFileSync(path.join(dir, GLOBAL_ENV_FILE), '{ not json');
+    assert.deepStrictEqual(new GlobalEnvStore(dir).get(), { data: {} });
+    assert.deepStrictEqual(normalizeGlobalEnvironment({ data: [1] }), { data: {} });
+    assert.deepStrictEqual(
+      normalizeGlobalEnvironment({ data: { a: 1 }, descriptions: { a: 'x', gone: 'y', b: 3 } }),
+      { data: { a: 1 }, descriptions: { a: 'x' } },
+    );
     fs.rmSync(dir, { recursive: true, force: true });
   });
 });

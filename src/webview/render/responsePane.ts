@@ -1,5 +1,5 @@
-// Response pane：狀態列（status/time/size）+ Preview|Headers|Cookies|Console 分頁
-// + response history 下拉與清除。
+// Response pane：狀態列（status/time/size + Preview|Headers|Cookies|Console 檢視下拉）
+// + 動作列（response history 下拉與清除、Preview 的原始/複製圖示鈕）+ 固定顯示的搜尋列。
 
 import type { ResponseRecord } from '../../core/model/types';
 import {
@@ -36,7 +36,12 @@ function bodyText(record: ResponseRecord): { text: string; isBinary: boolean } {
   return { text, isBinary: record.bodyEncoding === 'base64' };
 }
 
-function previewTab(record: ResponseRecord): HTMLElement {
+function codicon(name: string): HTMLElement {
+  return el('span', { class: `codicon codicon-${name}` });
+}
+
+/** actions：動作列右側的容器，Preview 的「檢視原始／複製」圖示鈕放這裡，不另佔一列。 */
+function previewTab(record: ResponseRecord, actions: HTMLElement): HTMLElement {
   const box = el('div', {});
   const { text, isBinary } = bodyText(record);
   if (record.error) {
@@ -48,12 +53,13 @@ function previewTab(record: ResponseRecord): HTMLElement {
     return box;
   }
   const modeBtn = el('button', {
-    class: 'secondary',
+    class: 'icon',
+    title: state.responseViewMode === 'pretty' ? '檢視原始' : '格式化檢視',
     onclick: () => {
       state.responseViewMode = state.responseViewMode === 'pretty' ? 'raw' : 'pretty';
       render();
     },
-  }, state.responseViewMode === 'pretty' ? '檢視原始' : '格式化檢視');
+  }, codicon(state.responseViewMode === 'pretty' ? 'code' : 'json'));
 
   let display = text;
   if (
@@ -70,11 +76,12 @@ function previewTab(record: ResponseRecord): HTMLElement {
     box.append(el('div', { class: 'console-line warn' }, `body 已截斷保存（原始大小 ${formatSize(record.bodySize)}）`));
   }
   const copyBtn = el('button', {
-    class: 'secondary',
+    class: 'icon',
     title: '複製目前顯示的回應內容',
     onclick: () => post({ type: 'copyText', text: display, label: '回應內容' }),
-  }, '複製');
-  box.append(el('div', { class: 'resp-toolbar' }, modeBtn, copyBtn), el('pre', { class: 'resp-body' }, display));
+  }, codicon('copy'));
+  actions.append(modeBtn, copyBtn);
+  box.append(el('pre', { class: 'resp-body' }, display));
   return box;
 }
 
@@ -180,54 +187,58 @@ export function renderResponsePane(root: HTMLElement): void {
     );
   }
 
-  const statusBar = el(
-    'div',
-    { class: 'resp-status' },
-    el('span', { class: `status-pill ${statusClass}` }, record.status === 0 ? 'ERROR' : `${record.status} ${record.statusText}`.trim()),
-    el('span', { class: 'resp-meta' }, `${record.durationMs} ms`),
-    el('span', { class: 'resp-meta' }, formatSize(record.bodySize)),
-    el(
-      'span',
-      { class: 'resp-history' },
-      historySelect,
-      el('button', {
-        class: 'icon',
-        title: '清除歷史',
-        onclick: () => {
-          post({ type: 'clearHistory', collectionId: state.collection!.id, requestId: request.id });
-        },
-      }, '🗑'),
-    ),
-  );
-  root.append(statusBar);
-
+  // 分頁改下拉，與歷史下拉同一列，省掉一整排分頁列
+  const tabSelect = el('select', {
+    title: '回應檢視',
+    onchange: (ev: Event) => {
+      state.responseTab = (ev.target as HTMLSelectElement).value;
+      render();
+    },
+  });
   const tabs: Array<[string, string]> = [
     ['preview', 'Preview'],
     ['headers', 'Headers'],
     ['cookies', 'Cookies'],
     ['console', 'Console'],
   ];
-  const subtabs = el('div', { class: 'subtabs' });
   for (const [id, label] of tabs) {
-    subtabs.append(
-      el('button', {
-        class: `tab${state.responseTab === id ? ' active' : ''}`,
-        onclick: () => {
-          state.responseTab = id;
-          render();
-        },
-      }, label),
-    );
+    tabSelect.append(el('option', { value: id, ...(state.responseTab === id ? { selected: 'selected' } : {}) }, label));
   }
-  root.append(subtabs);
+
+  // 狀態列：狀態＋耗時＋大小，檢視下拉靠右
+  const statusBar = el(
+    'div',
+    { class: 'resp-status' },
+    el('span', { class: `status-pill ${statusClass}` }, record.status === 0 ? 'ERROR' : `${record.status} ${record.statusText}`.trim()),
+    el('span', { class: 'resp-meta' }, `${record.durationMs} ms`),
+    el('span', { class: 'resp-meta' }, formatSize(record.bodySize)),
+    tabSelect,
+  );
+  // 動作列：歷史下拉可縮（寬度不夠時縮它，右側圖示鈕不會被擠出面板），檢視相關圖示鈕靠右
+  const viewActions = el('span', { class: 'resp-view-actions' });
+  const actionBar = el(
+    'div',
+    { class: 'resp-actions' },
+    historySelect,
+    el('button', {
+      class: 'icon',
+      title: '清除歷史',
+      onclick: () => {
+        post({ type: 'clearHistory', collectionId: state.collection!.id, requestId: request.id });
+      },
+    }, codicon('trash')),
+    viewActions,
+  );
+  root.append(statusBar, actionBar);
 
   const body = el('div', { class: 'pane-body' });
-  // 搜尋列吃的是目前分頁已渲染出來的內容，切分頁後由 refresh() 重新標示
+  // 搜尋列吃的是目前分頁已渲染出來的內容，切分頁後由 refresh() 重新標示；回應面板固定顯示，不必 Cmd/Ctrl+F 開啟
   const findBar = createFindBar({
     findState: state.find.response,
     target: () => body,
     placeholder: '搜尋回應內容…',
     onClose: () => render(),
+    persistent: true,
   });
   if (findBar) {
     root.append(findBar.element);
@@ -243,7 +254,7 @@ export function renderResponsePane(root: HTMLElement): void {
       body.append(consoleTab(record));
       break;
     default:
-      body.append(previewTab(record));
+      body.append(previewTab(record, viewActions));
   }
   root.append(body);
   findBar?.refresh();

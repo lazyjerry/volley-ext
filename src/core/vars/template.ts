@@ -86,3 +86,18 @@ export function containsTemplate(input: string): boolean {
   VAR_RE.lastIndex = 0;
   return VAR_RE.test(input) || TAG_RE.test(input);
 }
+
+/**
+ * 單一 `{{ }}` 片段的值來源：local = collection 自己的環境（base／sub-env／資料夾）就查得到；
+ * global = 只有疊上共用環境後才查得到；missing = 兩者都查不到。
+ */
+export function tokenOrigin(
+  token: string,
+  merged: Record<string, unknown>,
+  local: Record<string, unknown>,
+): 'local' | 'global' | 'missing' {
+  if (interpolate(token, merged).missing.length > 0) {
+    return 'missing';
+  }
+  return interpolate(token, local).missing.length > 0 ? 'global' : 'local';
+}

@@ -371,3 +371,14 @@ suite('security/webview 訊息驗證', () => {
     assert.strictEqual(isClientMessage({ type: 1 }), false);
   });
 });
+
+suite('security/共用環境訊息驗證', () => {
+  test('updateGlobalEnvironment 的 environment.data 必須是物件', () => {
+    const ok = { type: 'updateGlobalEnvironment', collectionId: 'wrk_1', environment: { data: { a: 1 } } };
+    assert.strictEqual(isClientMessage(ok), true);
+    assert.strictEqual(isClientMessage({ ...ok, environment: null }), false);
+    assert.strictEqual(isClientMessage({ ...ok, environment: { data: [1] } }), false);
+    assert.strictEqual(isClientMessage({ ...ok, environment: {} }), false);
+    assert.strictEqual(isClientMessage({ ...ok, collectionId: 1 }), false);
+  });
+});

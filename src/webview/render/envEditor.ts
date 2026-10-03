@@ -1,9 +1,10 @@
 // 環境變數獨立管理畫面（覆蓋主區域）。
-// 左列：Base + sub-environments（新增/刪除/改名/設色）；右側：變數表格或原始 JSON。
+// 左列：共用環境 + Base + sub-environments（新增/刪除/改名/設色）；右側：變數表格或原始 JSON。
+// 共用環境不屬於 collection：跨同一資料根的所有 collection，存檔走 touchGlobalEnv()。
 // 資料夾層級變數由資料夾右鍵進入，編輯該資料夾的 environment 物件。
 
 import { isFolder } from '../../core/model/types';
-import { el, findNode, flushPendingEdits, post, render, state, touch, touchUi } from '../store';
+import { el, findNode, flushPendingEdits, post, render, state, touch, touchGlobalEnv, touchUi } from '../store';
 import { createFindBar } from './findBar';
 
 export function openEnvEditor(target: 'collection' | { folderId: string }): void {
@@ -50,6 +51,8 @@ interface EnvTarget {
   setData: (d: Record<string, unknown>) => void;
   descriptions: Record<string, string>;
   setDescriptions: (d: Record<string, string>) => void;
+  /** 變動後回存：collection 內的環境走 touch()，共用環境走 touchGlobalEnv() */
+  touch: () => void;
 }
 
 function targetData(): EnvTarget | null {
@@ -73,6 +76,21 @@ function targetData(): EnvTarget | null {
       setDescriptions: (d) => {
         folder.environmentDescriptions = Object.keys(d).length > 0 ? d : undefined;
       },
+      touch,
+    };
+  }
+  if (editor.selectedEnvId === 'global') {
+    const globalEnv = state.globalEnv;
+    return {
+      data: globalEnv.data,
+      setData: (d) => {
+        globalEnv.data = d;
+      },
+      descriptions: globalEnv.descriptions ?? {},
+      setDescriptions: (d) => {
+        globalEnv.descriptions = Object.keys(d).length > 0 ? d : undefined;
+      },
+      touch: touchGlobalEnv,
     };
   }
   const env = editor.selectedEnvId === 'base'
@@ -90,6 +108,7 @@ function targetData(): EnvTarget | null {
     setDescriptions: (d) => {
       env.descriptions = Object.keys(d).length > 0 ? d : undefined;
     },
+    touch,
   };
 }
 
@@ -97,7 +116,7 @@ function envList(): HTMLElement {
   const editor = state.envEditor!;
   const collection = state.collection!;
   const removeSelected = (): void => {
-    if (editor.selectedEnvId === 'base') {
+    if (editor.selectedEnvId === 'base' || editor.selectedEnvId === 'global') {
       return;
     }
     const idx = collection.environments.subEnvironments.findIndex((s) => s.id === editor.selectedEnvId);
@@ -121,8 +140,10 @@ function envList(): HTMLElement {
       el('span', { style: 'font-weight:600' }, '環境'),
       el('button', {
         class: 'icon',
-        title: editor.selectedEnvId === 'base' ? 'Base Environment 不可移除' : '移除選取的環境',
-        disabled: editor.selectedEnvId === 'base',
+        title: editor.selectedEnvId === 'base'
+          ? 'Base Environment 不可移除'
+          : editor.selectedEnvId === 'global' ? '共用環境不可移除' : '移除選取的環境',
+        disabled: editor.selectedEnvId === 'base' || editor.selectedEnvId === 'global',
         style: 'margin-left:auto',
         onclick: removeSelected,
       }, '−'),
@@ -130,6 +151,19 @@ function envList(): HTMLElement {
     ),
   );
   const items = el('div', { class: 'items' });
+  items.append(el(
+    'div',
+    {
+      class: `env-item global${editor.selectedEnvId === 'global' ? ' selected' : ''}`,
+      title: '同一資料夾內所有 collection 共用；同名變數以目前選擇的環境為準',
+      onclick: () => {
+        editor.selectedEnvId = 'global';
+        render();
+      },
+    },
+    el('span', { class: 'env-dot global' }),
+    el('span', {}, '共用環境'),
+  ));
   const baseItem = el(
     'div',
     {
@@ -195,7 +229,7 @@ export function applyEnvVarDelete(key: string): void {
   const descriptions = { ...target.descriptions };
   delete descriptions[key];
   target.setDescriptions(descriptions);
-  touch();
+  target.touch();
   markDirty();
   render();
 }
@@ -221,7 +255,7 @@ function kvEditor(target: EnvTarget): HTMLElement {
     }
     target.setData(next);
     target.setDescriptions(nextDescriptions);
-    touch();
+    target.touch();
     markDirty();
   };
   entries.forEach(([key, value, comment], idx) => {
@@ -335,7 +369,13 @@ export function renderEnvEditor(): HTMLElement | null {
   const target = targetData();
   const toolbar = el('div', { class: 'pane-toolbar' });
 
-  if (isCollectionTarget && editor.selectedEnvId !== 'base') {
+  if (isCollectionTarget && editor.selectedEnvId === 'global') {
+    const source = state.collections.find((c) => c.id === collection.id)?.source;
+    toolbar.append(
+      el('span', { style: 'font-weight:600' }, '共用環境'),
+      el('span', { class: 'hint' }, `套用到${source === 'private' ? '私人' : '共用'}資料夾的所有 collection；同名變數以目前選擇的環境為準`),
+    );
+  } else if (isCollectionTarget && editor.selectedEnvId !== 'base') {
     const sub = collection.environments.subEnvironments.find((s) => s.id === editor.selectedEnvId);
     if (sub) {
       const nameInput = el('input', { type: 'text', value: sub.name, spellcheck: false });
@@ -427,7 +467,7 @@ export function renderEnvEditor(): HTMLElement | null {
         target.setDescriptions(
           Object.fromEntries(Object.entries(descriptions).filter(([k]) => k in data)),
         );
-        touch();
+        target.touch();
         markDirty();
         hint.textContent = '已套用。';
       } catch (err) {

@@ -5,12 +5,13 @@ import type {
   Collection,
   CollectionSummary,
   Folder,
+  GlobalEnvironment,
   RequestItem,
   ResponseRecord,
   TreeNode,
   UiState,
 } from '../core/model/types';
-import { emptyUiState, isFolder, walkRequests } from '../core/model/types';
+import { emptyGlobalEnvironment, emptyUiState, isFolder, walkRequests } from '../core/model/types';
 import type { ClientConfig, ClientMessage } from '../shared/protocol';
 
 declare function acquireVsCodeApi(): {
@@ -50,6 +51,8 @@ export function emptyFindState(): FindState {
 export interface AppState {
   collections: CollectionSummary[];
   collection: Collection | null;
+  /** 作用中 collection 所屬資料根的共用環境（跨 collection 共用，另存一檔） */
+  globalEnv: GlobalEnvironment;
   ui: UiState;
   config: ClientConfig | null;
   conflictedCopies: string[];
@@ -63,15 +66,15 @@ export interface AppState {
   fullBodyByResponseId: Map<string, string>;
   variablePreview: { result: string; missing: string[] } | null;
   /** rawMode：off = 表格；full = 含註解的包裝 JSON；dataOnly = 純變數 map */
-  envEditor: null | { target: 'collection' | { folderId: string }; selectedEnvId: string | 'base'; rawMode: 'off' | 'full' | 'dataOnly'; dirty: boolean };
+  envEditor: null | { target: 'collection' | { folderId: string }; selectedEnvId: string | 'base' | 'global'; rawMode: 'off' | 'full' | 'dataOnly'; dirty: boolean };
   renamingNodeId: string | null;
-  notice: { level: string; message: string } | null;
   find: Record<FindKey, FindState>;
 }
 
 export const state: AppState = {
   collections: [],
   collection: null,
+  globalEnv: emptyGlobalEnvironment(),
   ui: emptyUiState(),
   config: null,
   conflictedCopies: [],
@@ -86,7 +89,6 @@ export const state: AppState = {
   variablePreview: null,
   envEditor: null,
   renamingNodeId: null,
-  notice: null,
   find: {
     sidebar: emptyFindState(),
     request: emptyFindState(),
@@ -96,30 +98,18 @@ export const state: AppState = {
 };
 
 let renderFn: () => void = () => undefined;
-let noticeRenderFn: () => void = () => undefined;
 
 export function setRenderFn(fn: () => void): void {
   renderFn = fn;
-}
-
-/** 通知列的局部重繪；notice 不走全量 render，否則會換掉正在編輯的欄位。 */
-export function setNoticeRenderFn(fn: () => void): void {
-  noticeRenderFn = fn;
 }
 
 export function render(): void {
   renderFn();
 }
 
-export function notice(level: string, message: string): void {
-  state.notice = { level, message };
-  noticeRenderFn();
-  setTimeout(() => {
-    if (state.notice?.message === message) {
-      state.notice = null;
-      noticeRenderFn();
-    }
-  }, 6000);
+/** 通知一律交給 host 以 VS Code 右下角 toast 顯示；面板內不放通知列，避免版面上下晃動。 */
+export function notice(level: 'info' | 'warn' | 'error', message: string): void {
+  post({ type: 'showNotice', level, message });
 }
 
 /** 使用者是否正停在可編輯欄位裡（全量 render 會把它連同 caret 一起換掉）。 */
@@ -141,12 +131,18 @@ export function isEditing(): boolean {
 
 let persistTimer: ReturnType<typeof setTimeout> | undefined;
 let pendingCollection: Collection | undefined;
+let globalEnvTimer: ReturnType<typeof setTimeout> | undefined;
+let pendingGlobalEnv: { collectionId: string; environment: GlobalEnvironment } | undefined;
 let uiTimer: ReturnType<typeof setTimeout> | undefined;
 let pendingUi: { collectionId: string; state: UiState } | undefined;
 let editRevision = 0;
 
 export function hasPendingEdits(): boolean {
   return persistTimer !== undefined;
+}
+
+export function hasPendingGlobalEnvEdits(): boolean {
+  return globalEnvTimer !== undefined;
 }
 
 export function getEditRevision(): number {
@@ -179,6 +175,35 @@ function persistPendingEdits(): void {
   }
 }
 
+/** 共用環境變更後呼叫：debounce 回存到作用中 collection 所屬資料根。 */
+export function touchGlobalEnv(): void {
+  const collection = state.collection;
+  if (!collection) {
+    return;
+  }
+  editRevision++;
+  pendingGlobalEnv = { collectionId: collection.id, environment: state.globalEnv };
+  if (globalEnvTimer) {
+    clearTimeout(globalEnvTimer);
+  }
+  globalEnvTimer = setTimeout(() => {
+    globalEnvTimer = undefined;
+    persistPendingGlobalEnv();
+  }, 300);
+}
+
+function persistPendingGlobalEnv(): void {
+  const update = pendingGlobalEnv;
+  pendingGlobalEnv = undefined;
+  if (update) {
+    post({
+      type: 'updateGlobalEnvironment',
+      collectionId: update.collectionId,
+      environment: JSON.parse(JSON.stringify(update.environment)) as GlobalEnvironment,
+    });
+  }
+}
+
 /** webview 離開前立即送出 debounce 中的編輯。 */
 export function flushPendingEdits(): void {
   if (persistTimer) {
@@ -186,6 +211,11 @@ export function flushPendingEdits(): void {
     persistTimer = undefined;
   }
   persistPendingEdits();
+  if (globalEnvTimer) {
+    clearTimeout(globalEnvTimer);
+    globalEnvTimer = undefined;
+  }
+  persistPendingGlobalEnv();
   if (uiTimer) {
     clearTimeout(uiTimer);
     uiTimer = undefined;

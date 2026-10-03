@@ -125,6 +125,20 @@ export interface EnvironmentSet {
   subEnvironments: SubEnvironment[];
 }
 
+/**
+ * 共用環境：同一資料根（共用／私人資料夾）底下所有 collection 共用的一組變數，
+ * 存在 collection 之外，優先權最低（同名以 collection 自己的環境為準）。
+ */
+export interface GlobalEnvironment {
+  data: Record<string, unknown>;
+  /** data 各 key 的註解，key 對 key（同 EnvironmentData.descriptions） */
+  descriptions?: Record<string, string>;
+}
+
+export function emptyGlobalEnvironment(): GlobalEnvironment {
+  return { data: {} };
+}
+
 export interface CookieRecord {
   id: string;
   key: string;
