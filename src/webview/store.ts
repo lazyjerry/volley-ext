@@ -107,6 +107,13 @@ export function render(): void {
   renderFn();
 }
 
+// 模型一變就通知的輕量 hook：輸入中不全量 render，但底部網址列要跟著變
+let modelChangedFn: () => void = () => undefined;
+
+export function setModelChangedFn(fn: () => void): void {
+  modelChangedFn = fn;
+}
+
 /** 通知一律交給 host 以 VS Code 右下角 toast 顯示；面板內不放通知列，避免版面上下晃動。 */
 export function notice(level: 'info' | 'warn' | 'error', message: string): void {
   post({ type: 'showNotice', level, message });
@@ -165,6 +172,7 @@ export function touch(): void {
     persistTimer = undefined;
     persistPendingEdits();
   }, 300);
+  modelChangedFn();
 }
 
 function persistPendingEdits(): void {
@@ -190,6 +198,7 @@ export function touchGlobalEnv(): void {
     globalEnvTimer = undefined;
     persistPendingGlobalEnv();
   }, 300);
+  modelChangedFn();
 }
 
 function persistPendingGlobalEnv(): void {

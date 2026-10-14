@@ -282,7 +282,7 @@ function nodeMenu(node: TreeNode, ev: MouseEvent): void {
 
 // 搜尋期間要暫時展開命中節點的祖先資料夾；不寫進 ui.expandedFolders，關掉搜尋就恢復原樣。
 let searchExpand = new Set<string>();
-// URL 平常只放在 title 屬性，搜尋時得把它渲染出來，否則命中了卻標不出來也看不到
+// URL 平常不顯示（title 放的是完整名稱），搜尋時得把它渲染出來，否則命中了卻標不出來也看不到
 let searchQuery = '';
 
 function nodeMatches(node: TreeNode, query: string): boolean {
@@ -444,7 +444,7 @@ function renderNode(node: TreeNode): HTMLElement {
       },
       el('span', { class: 'twisty' }, codicon(expanded ? 'chevron-down' : 'chevron-right')),
       el('span', { class: 'tree-icon' }, codicon(expanded ? 'folder-opened' : 'folder')),
-      state.renamingNodeId === node.id ? renameInput(node) : el('span', { class: 'tree-label' }, node.name),
+      state.renamingNodeId === node.id ? renameInput(node) : el('span', { class: 'tree-label', title: node.name }, node.name),
     );
     if (state.renamingNodeId !== node.id) {
       setupDrag(row, node);
@@ -458,6 +458,8 @@ function renderNode(node: TreeNode): HTMLElement {
       container.append(childrenBox);
     }
   } else {
+    // hover 顯示的是被截斷的完整名稱；網址已在底部網址列，不再塞進 title
+    const label = node.name || node.url || '(未命名)';
     const row = el(
       'div',
       {
@@ -466,7 +468,7 @@ function renderNode(node: TreeNode): HTMLElement {
         onclick: () => selectRequest(node.id),
       },
       el('span', { class: `method-tag method-${node.method}` }, node.method),
-      state.renamingNodeId === node.id ? renameInput(node) : el('span', { class: 'tree-label', title: node.url }, node.name || node.url || '(未命名)'),
+      state.renamingNodeId === node.id ? renameInput(node) : el('span', { class: 'tree-label', title: label }, label),
       searchQuery !== '' && node.name !== '' && node.url !== '' ? el('span', { class: 'tree-url' }, node.url) : null,
     );
     if (state.renamingNodeId !== node.id) {

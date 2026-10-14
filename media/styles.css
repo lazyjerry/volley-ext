@@ -299,6 +299,7 @@ body.vscode-light {
   min-height: 0;
   display: grid;
   grid-template-columns: var(--col-sidebar, minmax(160px, 22%)) 4px 1fr 4px 1fr;
+  grid-template-rows: minmax(0, 1fr) auto;
 }
 
 .pane {
@@ -350,6 +351,76 @@ body.layout-narrow .pane {
 
 body.layout-narrow .pane.narrow-active {
   display: flex;
+}
+
+/* ===== 底部完整網址列（橫跨 request + response） ===== */
+
+#pane-sidebar,
+#split-1 {
+  grid-row: 1 / 3;
+}
+
+#pane-request,
+#split-2,
+#pane-response {
+  grid-row: 1;
+}
+
+#url-bar {
+  grid-column: 3 / 6;
+  grid-row: 2;
+  min-width: 0;
+  padding: 4px 6px;
+  border-top: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.2));
+  background: var(--vscode-editor-background);
+}
+
+#url-bar.hidden,
+body.layout-narrow #url-bar.narrow-hidden {
+  display: none;
+}
+
+#url-bar .url-bar-text {
+  display: block;
+  width: 100%;
+  max-height: 7.5em;
+  resize: none;
+  overflow-y: auto;
+  padding: 3px 6px;
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 0.9em;
+  line-height: 1.5;
+  color: var(--vscode-input-foreground);
+  background: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border, transparent);
+  border-radius: 2px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  cursor: text;
+}
+
+#url-bar .url-bar-text:focus {
+  outline: none;
+  border-color: var(--vscode-focusBorder);
+}
+
+#url-bar.has-missing-var .url-bar-text {
+  border-color: var(--warn);
+}
+
+body.layout-narrow #main {
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+
+body.layout-narrow #pane-sidebar,
+body.layout-narrow #pane-request,
+body.layout-narrow #pane-response {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+body.layout-narrow #url-bar {
+  grid-column: 1;
 }
 
 .tab {

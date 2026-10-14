@@ -10,6 +10,9 @@ export interface InterpolateResult {
 const VAR_RE = /\{\{\s*([^{}]+?)\s*\}\}/g;
 const TAG_RE = /\{%[^%]*%\}/;
 
+/** 任一 `{{ }}` 或 `{% %}` 片段（global），給需要整段挑出變數的呼叫端用。 */
+export const TEMPLATE_RE = new RegExp(`${VAR_RE.source}|${TAG_RE.source}`, 'g');
+
 /** 解析 `_.a.b` / `_['x-y']` / `_["x"]` / `a.b` 為 key path；無法解析回傳 null。 */
 export function parseVarPath(expr: string): string[] | null {
   let rest = expr.trim();

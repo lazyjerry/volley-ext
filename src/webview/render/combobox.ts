@@ -39,7 +39,8 @@ function dot(color: string | null): HTMLElement {
 }
 
 export function combobox(config: ComboConfig): HTMLElement {
-  const container = el('div', { class: 'combo', title: config.title ?? '' });
+  // title 第一行放完整名稱（被截斷時 hover 看得到），第二行才是用途說明
+  const container = el('div', { class: 'combo', title: config.title ? `${config.display}\n${config.title}` : config.display });
   const button = el(
     'div',
     { class: 'combo-button', tabindex: '0', role: 'button' },
@@ -108,7 +109,7 @@ export function combobox(config: ComboConfig): HTMLElement {
         addRow(
           el(
             'div',
-            { class: `combo-option${option.value === config.selectedValue ? ' selected' : ''}` },
+            { class: `combo-option${option.value === config.selectedValue ? ' selected' : ''}`, title: option.label },
             option.dotColor !== undefined ? dot(option.dotColor) : null,
             el('span', { class: 'combo-label' }, option.label),
           ),

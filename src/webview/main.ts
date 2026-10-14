@@ -17,6 +17,7 @@ import {
   post,
   render,
   selectedRequest,
+  setModelChangedFn,
   setRenderFn,
   state,
   touch,
@@ -28,6 +29,7 @@ import { applyFolderDelete, renderSidebar } from './render/sidebar';
 import { renderRequestPane } from './render/requestPane';
 import { renderResponsePane } from './render/responsePane';
 import { applyEnvVarDelete, renderEnvEditor } from './render/envEditor';
+import { renderUrlBar } from './render/urlBar';
 
 function buildSkeleton(): void {
   const app = document.getElementById('app')!;
@@ -43,6 +45,7 @@ function buildSkeleton(): void {
       el('div', { id: 'pane-request', class: 'pane' }),
       el('div', { id: 'split-2', class: 'splitter' }),
       el('div', { id: 'pane-response', class: 'pane' }),
+      el('div', { id: 'url-bar' }),
     ),
   );
 }
@@ -179,6 +182,7 @@ function fullRender(): void {
   renderSidebar(document.getElementById('pane-sidebar')!);
   renderRequestPane(document.getElementById('pane-request')!);
   renderResponsePane(document.getElementById('pane-response')!);
+  renderUrlBar();
   document.getElementById('env-editor')?.remove();
   const envOverlay = renderEnvEditor();
   if (envOverlay) {
@@ -355,6 +359,7 @@ function initFind(): void {
 function boot(): void {
   buildSkeleton();
   setRenderFn(fullRender);
+  setModelChangedFn(renderUrlBar);
   initLayout();
   initSplitters();
   initAutosaveFeedback();

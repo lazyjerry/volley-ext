@@ -3,6 +3,7 @@
 
 import type { Folder, RequestItem } from '../model/types';
 import { interpolate } from '../vars/template';
+import { buildUrl } from './buildUrl';
 
 export interface BuiltRequest {
   url: string;
@@ -37,24 +38,8 @@ export function buildRequest(
     return res.result;
   };
 
-  let url = r(request.url.trim());
-  if (!/^https?:\/\//i.test(url)) {
-    url = `http://${url}`;
-  }
-
-  const query = request.parameters
-    .filter((p) => !p.disabled && p.name !== '')
-    .map((p) => {
-      const name = r(p.name);
-      const value = r(p.value);
-      return request.settings.encodeUrl
-        ? `${encodeURIComponent(name)}=${encodeURIComponent(value)}`
-        : `${name}=${value}`;
-    })
-    .join('&');
-  if (query) {
-    url += (url.includes('?') ? '&' : '?') + query;
-  }
+  // query 參數與 query 形式的 apikey 都在 buildUrl 接上，與 webview 的完整網址列共用
+  const url = buildUrl(request, r);
 
   const headers: Array<[string, string]> = [];
   let apiKeyHeader: string | undefined;
@@ -81,12 +66,10 @@ export function buildRequest(
     } else if (authType === 'bearer') {
       const prefix = String(auth.prefix ?? '').trim() || 'Bearer';
       headers.push(['Authorization', `${prefix} ${r(String(auth.token ?? ''))}`]);
-    } else if (authType === 'apikey') {
+    } else if (authType === 'apikey' && (auth.addTo ?? 'header') !== 'queryParams') {
       const key = r(String(auth.key ?? ''));
       const value = r(String(auth.value ?? ''));
-      if ((auth.addTo ?? 'header') === 'queryParams') {
-        url += (url.includes('?') ? '&' : '?') + `${encodeURIComponent(key)}=${encodeURIComponent(value)}`;
-      } else if (key) {
+      if (key) {
         headers.push([key, value]);
         apiKeyHeader = key;
       }

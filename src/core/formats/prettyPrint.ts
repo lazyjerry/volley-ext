@@ -1,9 +1,47 @@
 // Body 美化：依 MIME 重排文字內容。不合法就丟 Error，由呼叫端提示使用者。
 
 import { parseDocument } from 'yaml';
+import { TEMPLATE_RE } from '../vars/template';
 
+/**
+ * `{{ }}`／`{% %}` 片段不是合法 JSON，先換成佔位字串再 parse，排版後原樣放回。
+ * 片段在字串常值外（`"id": {{ _.x }}`）要連引號一起換，在字串內（`"a {{ _.x }}"`）只換片段本身，
+ * 兩種用不同前綴，還原時才分得出引號是佔位帶進來的還是原文的。
+ */
 export function prettyJson(text: string): string {
-  return JSON.stringify(JSON.parse(text), null, 2);
+  const fragments: string[] = [];
+  let masked = '';
+  let cursor = 0;
+  let inString = false;
+  for (const match of text.matchAll(TEMPLATE_RE)) {
+    const gap = text.slice(cursor, match.index);
+    inString = scanStringState(gap, inString);
+    const n = fragments.push(match[0]) - 1;
+    masked += gap + (inString ? `__volley_s${n}__` : `"__volley_v${n}__"`);
+    cursor = match.index + match[0].length;
+  }
+  masked += text.slice(cursor);
+  const pretty = JSON.stringify(JSON.parse(masked), null, 2);
+  return pretty
+    .replace(/"__volley_v(\d+)__"/g, (_, n: string) => fragments[Number(n)])
+    .replace(/__volley_s(\d+)__/g, (_, n: string) => fragments[Number(n)]);
+}
+
+/** 走過一段 JSON 原文，回傳結尾是否停在字串常值內。 */
+function scanStringState(src: string, inString: boolean): boolean {
+  for (let i = 0; i < src.length; i++) {
+    const ch = src[i];
+    if (inString) {
+      if (ch === '\\') {
+        i++;
+      } else if (ch === '"') {
+        inString = false;
+      }
+    } else if (ch === '"') {
+      inString = true;
+    }
+  }
+  return inString;
 }
 
 export function prettyYaml(text: string): string {

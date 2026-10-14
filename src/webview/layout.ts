@@ -30,6 +30,11 @@ export function applyColumnWidths(): void {
   if (!main) {
     return;
   }
+  // 窄版由 CSS 的單欄接手；留著五欄的 inline 樣式會把作用中的面板擠成側欄寬度
+  if (state.isNarrow) {
+    main.style.gridTemplateColumns = '';
+    return;
+  }
   const sidebarPct = state.ui.layout?.sidebarPct ?? 22;
   const requestPct = state.ui.layout?.requestPct ?? 39;
   main.style.gridTemplateColumns = `minmax(150px, ${sidebarPct}%) 4px minmax(200px, ${requestPct}%) 4px 1fr`;

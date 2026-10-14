@@ -11,7 +11,25 @@ suite('formats/prettyPrint', () => {
 
   test('JSON：不合法就丟錯', () => {
     assert.throws(() => prettyJson('{"a":}'));
-    assert.throws(() => prettyJson('{{ _.body }}'));
+    assert.throws(() => prettyJson('{"a": {{ _.x }}'));
+  });
+
+  test('JSON：字串外的變數片段當成值排版、原樣保留', () => {
+    assert.strictEqual(
+      prettyJson('{"ids":[{{ _.config_ids }}],"d":[{"id":{{ _.department_id }}}]}'),
+      '{\n  "ids": [\n    {{ _.config_ids }}\n  ],\n  "d": [\n    {\n      "id": {{ _.department_id }}\n    }\n  ]\n}',
+    );
+  });
+
+  test('JSON：字串內的變數片段與 {% %} 留在字串裡', () => {
+    assert.strictEqual(
+      prettyJson('{"n":"a {{ _.x }} b","q":"{{ _.y }}","e":"say \\"{% now %}\\"","k":{{ _["x-y"] }}}'),
+      '{\n  "n": "a {{ _.x }} b",\n  "q": "{{ _.y }}",\n  "e": "say \\"{% now %}\\"",\n  "k": {{ _["x-y"] }}\n}',
+    );
+  });
+
+  test('JSON：整段是變數就原樣回傳', () => {
+    assert.strictEqual(prettyJson('{{ _.body }}'), '{{ _.body }}');
   });
 
   test('YAML：重排縮排並保留註解', () => {
