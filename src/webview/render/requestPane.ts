@@ -107,7 +107,8 @@ function varField(
   input.value = value;
   const overlay = el('div', { class: 'template-overlay', 'aria-hidden': 'true' });
   const suggestions = el('div', { class: 'var-suggestions', role: 'listbox' });
-  const wrapper = el('div', { class: `template-field ${kind === 'textarea' ? 'multiline' : ''} ${fieldClass}` }, overlay, input, suggestions);
+  const tooltip = el('div', { class: 'var-tooltip', 'aria-hidden': 'true' });
+  const wrapper = el('div', { class: `template-field ${kind === 'textarea' ? 'multiline' : ''} ${fieldClass}` }, overlay, input, suggestions, tooltip);
   let suggestionIndex = 0;
   let triggerStart = -1;
   // overlay 與 input 逐字元等寬才對得齊 caret，所以只在「沒有 caret 也沒有滑鼠」時才收合成 chip。
@@ -125,7 +126,49 @@ function varField(
     const expr = token.slice(2, -2);
     return parseVarPath(expr)?.join('.') ?? expr.trim();
   };
+  // hover 在片段上顯示解析值。input 蓋在 overlay 上層且 overlay 是 pointer-events: none，
+  // 原生 title 放不到 token span，改在 input 的 mousemove 用 token 的 client rect 找游標落在哪個片段。
+  let tooltipToken: HTMLElement | null = null;
+  const hideTooltip = (): void => {
+    tooltipToken = null;
+    tooltip.classList.remove('open');
+  };
+  const tokenAt = (x: number, y: number): { span: HTMLElement; rect: DOMRect } | null => {
+    for (const span of overlay.querySelectorAll<HTMLElement>('.template-token')) {
+      for (const rect of span.getClientRects()) {
+        if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+          return { span, rect };
+        }
+      }
+    }
+    return null;
+  };
+  const showTooltip = (span: HTMLElement, rect: DOMRect): void => {
+    const raw = span.dataset.token ?? '';
+    const { result, missing } = interpolate(raw, currentEnv());
+    tooltip.replaceChildren(
+      el('span', { class: 'path' }, tokenLabel(raw)),
+      missing.length > 0
+        ? el('span', { class: 'value missing' }, '未定義')
+        : el('span', { class: 'value' }, result === '' ? '（空字串）' : result),
+    );
+    if (span.classList.contains('global')) {
+      tooltip.append(el('span', { class: 'origin' }, '共用環境'));
+    }
+    const wrap = wrapper.getBoundingClientRect();
+    // 欄位可能很窄（kv 表格的值欄），tooltip 允許比欄位寬，但不能超出所在 pane（overflow: hidden 會裁掉）
+    const bound = (wrapper.closest('.pane') ?? document.body).getBoundingClientRect();
+    const room = Math.max(wrap.width, bound.right - wrap.left - 4);
+    tooltip.style.maxWidth = `${room}px`;
+    tooltip.style.top = `${rect.bottom - wrap.top + 2}px`;
+    tooltip.style.left = '0px';
+    tooltip.classList.add('open');
+    // 先顯示才量得到寬度；靠右時往左貼齊
+    tooltip.style.left = `${Math.max(0, Math.min(rect.left - wrap.left, room - tooltip.offsetWidth))}px`;
+    tooltipToken = span;
+  };
   const paint = (): void => {
+    hideTooltip();
     overlay.replaceChildren();
     if (input.value === '') {
       overlay.append(el('span', { class: 'template-placeholder' }, String(fieldProps.placeholder ?? '')));
@@ -143,7 +186,7 @@ function varField(
       const origin = tokenOrigin(match[0], merged, local);
       overlay.append(el(
         'span',
-        { class: `template-token${origin === 'local' ? '' : ` ${origin}`}${collapsed ? ' collapsed' : ''}` },
+        { class: `template-token${origin === 'local' ? '' : ` ${origin}`}${collapsed ? ' collapsed' : ''}`, dataset: { token: match[0] } },
         collapsed ? tokenLabel(match[0]) : match[0],
       ));
       offset = start + match[0].length;
@@ -269,6 +312,19 @@ function varField(
   wrapper.addEventListener('mouseleave', () => {
     hovered = false;
     paint();
+  });
+  input.addEventListener('mousemove', (event) => {
+    const ev = event as MouseEvent;
+    if (suggestions.classList.contains('open')) {
+      hideTooltip();
+      return;
+    }
+    const hit = tokenAt(ev.clientX, ev.clientY);
+    if (!hit) {
+      hideTooltip();
+    } else if (hit.span !== tooltipToken) {
+      showTooltip(hit.span, hit.rect);
+    }
   });
   input.addEventListener('scroll', syncScroll);
   input.addEventListener('keydown', (event) => {
